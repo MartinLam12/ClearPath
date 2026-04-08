@@ -70,9 +70,13 @@ export default function LoginPage() {
                 <input type="checkbox" className="rounded border-surface-300" />
                 Remember me
               </label>
-              <a href="#" className="text-sm text-brand-600 hover:underline">
+              <button
+                type="button"
+                onClick={() => alert("Please contact support at hello@clearpath.ai to reset your password.")}
+                className="text-sm text-brand-600 hover:underline"
+              >
                 Forgot password?
-              </a>
+              </button>
             </div>
 
             <Button

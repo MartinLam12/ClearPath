@@ -41,12 +41,13 @@ export function Navbar() {
 
 function LandingNavbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { isLoggedIn } = useUser();
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-surface-100">
       <div className="container-wide">
         <div className="flex items-center justify-between h-16">
-          <Link href="/" className="flex items-center gap-2">
+          <Link href={isLoggedIn ? "/dashboard" : "/"} className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg gradient-brand flex items-center justify-center">
               <span className="text-white font-bold text-sm">C</span>
             </div>
@@ -106,7 +107,7 @@ function LandingNavbar() {
 function AppNavbar() {
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { user, initials, clearUser } = useUser();
+  const { user, initials, clearUser, isLoggedIn } = useUser();
   const [avatarOpen, setAvatarOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -138,7 +139,7 @@ function AppNavbar() {
             >
               <Menu className="w-5 h-5" />
             </button>
-            <Link href="/dashboard" className="flex items-center gap-2">
+            <Link href={isLoggedIn ? "/dashboard" : "/"} className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg gradient-brand flex items-center justify-center">
                 <span className="text-white font-bold text-sm">C</span>
               </div>

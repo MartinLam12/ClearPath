@@ -53,10 +53,7 @@ export default function SettingsPage() {
           <div className="w-16 h-16 rounded-full bg-brand-100 flex items-center justify-center">
             <span className="text-xl font-bold text-brand-700">{initials || "?"}</span>
           </div>
-          <div>
-            <Button variant="outline" size="sm">Change Photo</Button>
-            <p className="text-xs text-surface-400 mt-1">JPG or PNG, max 2MB</p>
-          </div>
+          <p className="text-xs text-surface-400">Your initials are used as your avatar</p>
         </div>
       </Card>
 

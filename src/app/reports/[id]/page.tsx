@@ -43,6 +43,34 @@ const iconMap: Record<string, React.ReactNode> = {
 export default function ReportDetailPage() {
   const [report, setReport] = useState<AssessmentReport | null>(null);
   const [expandedRec, setExpandedRec] = useState<string | null>(null);
+  const [showCopied, setShowCopied] = useState(false);
+
+  const handleShare = async () => {
+    const url = window.location.href;
+    const title = report
+      ? `${report.businessName} — AI Readiness Report`
+      : "AI Readiness Report";
+    const text = report
+      ? `Check out this AI readiness report for ${report.businessName} (Score: ${report.readinessScore}/100)`
+      : "Check out this AI readiness report from ClearPath";
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title, text, url });
+        return;
+      } catch {
+        // User cancelled or share failed — fall through to clipboard
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(url);
+      setShowCopied(true);
+      setTimeout(() => setShowCopied(false), 2000);
+    } catch {
+      // Clipboard failed — do nothing
+    }
+  };
 
   useEffect(() => {
     // Try to generate from saved assessment data, fall back to mock
@@ -93,10 +121,10 @@ export default function ReportDetailPage() {
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" icon={<Share2 className="w-4 h-4" />}>
+          <Button variant="outline" size="sm" icon={<Share2 className="w-4 h-4" />} onClick={handleShare}>
             Share
           </Button>
-          <Button variant="outline" size="sm" icon={<Download className="w-4 h-4" />}>
+          <Button variant="outline" size="sm" icon={<Download className="w-4 h-4" />} onClick={() => window.print()}>
             Export PDF
           </Button>
         </div>
@@ -327,7 +355,7 @@ export default function ReportDetailPage() {
           Share this report with your team, or start a new assessment as your business evolves.
         </p>
         <div className="flex items-center justify-center gap-3">
-          <Button variant="outline" size="sm" icon={<Share2 className="w-4 h-4" />}>
+          <Button variant="outline" size="sm" icon={<Share2 className="w-4 h-4" />} onClick={handleShare}>
             Share Report
           </Button>
           <Link href="/assessment">
@@ -335,6 +363,13 @@ export default function ReportDetailPage() {
           </Link>
         </div>
       </Card>
+
+      {/* Copied toast */}
+      {showCopied && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-surface-900 text-white text-sm px-4 py-2 rounded-lg shadow-lg z-50 animate-fade-in">
+          Link copied to clipboard!
+        </div>
+      )}
     </div>
   );
 }
