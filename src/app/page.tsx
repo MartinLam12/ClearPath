@@ -8,9 +8,7 @@ import {
   Lightbulb,
   Target,
   TrendingUp,
-  Users,
   Zap,
-  Star,
   Shield,
   ChevronRight,
 } from "lucide-react";
@@ -23,7 +21,6 @@ export default function LandingPage() {
       <FeaturesSection />
       <HowItWorksSection />
       <ResultsPreview />
-      <TestimonialsSection />
       <CTASection />
     </div>
   );
@@ -324,77 +321,6 @@ function ResultsPreview() {
               </div>
             </div>
           </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function TestimonialsSection() {
-  const testimonials = [
-    {
-      quote:
-        "ClearPath helped us see that we were spending 15 hours a week on things AI could handle. We started with their top recommendation and freed up two full days of admin time.",
-      name: "Maria Rodriguez",
-      role: "Owner, Fresh Start Cleaning Co.",
-      rating: 5,
-    },
-    {
-      quote:
-        "As a solo consultant, I didn't think AI was relevant to me. The assessment showed me three quick wins I implemented in a week. My client follow-up is now automatic.",
-      name: "James Park",
-      role: "Independent Marketing Consultant",
-      rating: 5,
-    },
-    {
-      quote:
-        "The report was incredibly detailed and practical. I shared it with my team and we had a clear plan within a day. No other tool gave us this kind of clarity.",
-      name: "Priya Sharma",
-      role: "Co-Founder, Bloom Digital Agency",
-      rating: 5,
-    },
-  ];
-
-  return (
-    <section id="testimonials" className="py-20 md:py-28 bg-surface-50">
-      <div className="container-wide">
-        <div className="text-center max-w-2xl mx-auto mb-16">
-          <h2 className="text-3xl md:text-display-md font-bold text-surface-900 mb-4">
-            Trusted by real business owners
-          </h2>
-          <p className="text-body-lg text-surface-500">
-            See what small business owners say about their ClearPath experience
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {testimonials.map((t) => (
-            <div
-              key={t.name}
-              className="p-6 rounded-2xl bg-white border border-surface-100 shadow-soft-xs"
-            >
-              <div className="flex gap-1 mb-4">
-                {Array.from({ length: t.rating }).map((_, i) => (
-                  <Star
-                    key={i}
-                    className="w-4 h-4 fill-accent-400 text-accent-400"
-                  />
-                ))}
-              </div>
-              <p className="text-surface-700 text-sm leading-relaxed mb-6">
-                &ldquo;{t.quote}&rdquo;
-              </p>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center">
-                  <Users className="w-5 h-5 text-brand-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-surface-900">{t.name}</p>
-                  <p className="text-xs text-surface-500">{t.role}</p>
-                </div>
-              </div>
-            </div>
-          ))}
         </div>
       </div>
     </section>

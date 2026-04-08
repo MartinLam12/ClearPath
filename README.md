@@ -8,7 +8,7 @@
 
 ## Features
 
-- **Landing Page** — Polished marketing page with hero, features, how-it-works, testimonials, and CTA
+- **Landing Page** — Polished marketing page with hero, features, how-it-works, results preview, and CTA
 - **Authentication** — Real email/password auth powered by Supabase (signup, login, session management)
 - **Route Protection** — Middleware-based auth guards redirect unauthenticated users to login
 - **Dashboard** — Overview with readiness score, category breakdown, top recommendations, and assessment history
