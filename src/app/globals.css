@@ -1,0 +1,67 @@
+@import "tailwindcss";
+@config "../../tailwind.config.ts";
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    font-family: "Inter", system-ui, -apple-system, sans-serif;
+    color: #1c1917;
+    background-color: #fafaf9;
+  }
+
+  ::selection {
+    background-color: #b5d9c8;
+    color: #0f211b;
+  }
+}
+
+@layer components {
+  .container-narrow {
+    max-width: 72rem;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+
+  .container-wide {
+    max-width: 80rem;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+
+  .gradient-subtle {
+    background: linear-gradient(135deg, #f0f7f4 0%, #fafaf9 50%, #fef7ee 100%);
+  }
+
+  .gradient-brand {
+    background: linear-gradient(135deg, #3b8a6a 0%, #2d6f54 100%);
+  }
+
+  .glass-card {
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+  }
+}
+
+@layer utilities {
+  .animate-delay-100 { animation-delay: 100ms; }
+  .animate-delay-200 { animation-delay: 200ms; }
+  .animate-delay-300 { animation-delay: 300ms; }
+  .animate-delay-400 { animation-delay: 400ms; }
+  .animate-delay-500 { animation-delay: 500ms; }
+}
