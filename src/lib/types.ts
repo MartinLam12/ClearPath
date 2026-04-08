@@ -94,6 +94,7 @@ export interface AssessmentReport {
   createdAt: string;
   businessName: string;
   businessType: BusinessType;
+  businessTypeDisplay?: string;
   readinessScore: number;
   readinessLevel: "Starting Out" | "Getting Ready" | "Well Positioned" | "Ready to Go";
   summary: string;

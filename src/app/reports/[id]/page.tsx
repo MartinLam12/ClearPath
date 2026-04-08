@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { Card, Badge, Button, ScoreRing, ProgressBar } from "@/components/ui";
 import { mockReport } from "@/lib/mock-data";
+import { loadAssessmentData, generateReport } from "@/lib/report-generator";
+import { AssessmentReport } from "@/lib/types";
 import {
   formatDate,
   formatImpact,
@@ -39,8 +41,28 @@ const iconMap: Record<string, React.ReactNode> = {
 };
 
 export default function ReportDetailPage() {
-  const report = mockReport;
-  const [expandedRec, setExpandedRec] = useState<string | null>(report.recommendations[0]?.id || null);
+  const [report, setReport] = useState<AssessmentReport | null>(null);
+  const [expandedRec, setExpandedRec] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Try to generate from saved assessment data, fall back to mock
+    const data = loadAssessmentData();
+    const r = data ? generateReport(data) : mockReport;
+    setReport(r);
+    setExpandedRec(r.recommendations[0]?.id || null);
+  }, []);
+
+  if (!report) {
+    return (
+      <div className="p-4 md:p-8 max-w-5xl mx-auto">
+        <div className="animate-pulse space-y-6">
+          <div className="h-8 w-48 bg-surface-200 rounded-lg" />
+          <div className="h-40 bg-surface-100 rounded-2xl" />
+          <div className="h-60 bg-surface-100 rounded-2xl" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-8">
@@ -65,7 +87,7 @@ export default function ReportDetailPage() {
           <div className="flex flex-wrap items-center gap-3 text-sm text-surface-500">
             <span>{report.businessName}</span>
             <span className="text-surface-300">•</span>
-            <span>{businessTypeLabels[report.businessType]}</span>
+            <span>{report.businessTypeDisplay || businessTypeLabels[report.businessType]}</span>
             <span className="text-surface-300">•</span>
             <span>{formatDate(report.createdAt)}</span>
           </div>
@@ -80,7 +102,7 @@ export default function ReportDetailPage() {
         </div>
       </div>
 
-      {/* Executive Summary */}
+      {/* Summary */}
       <Card className="gradient-subtle border-brand-100">
         <div className="flex flex-col md:flex-row items-center gap-8">
           <ScoreRing
@@ -91,7 +113,7 @@ export default function ReportDetailPage() {
           />
           <div className="flex-1 text-center md:text-left">
             <h2 className="text-lg font-semibold text-surface-900 mb-2">
-              Executive Summary
+              Summary
             </h2>
             <p className="text-surface-600 leading-relaxed">
               {report.summary}

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button, Card, Input, Select, Stepper, ToggleChip } from "@/components/ui";
 import { ArrowLeft, ArrowRight, Building2, Users, AlertTriangle, Wrench, Target, DollarSign } from "lucide-react";
 import { painPointLabels, goalLabels } from "@/lib/utils";
+import { saveAssessmentData } from "@/lib/report-generator";
 
 const steps = [
   { label: "Business Info", description: "Basic details" },
@@ -102,16 +103,21 @@ const repetitiveTasks = [
 interface FormData {
   businessName: string;
   businessType: string;
+  customBusinessType: string;
   teamSize: string;
   painPoints: string[];
+  customPainPoint: string;
   customerCommunicationVolume: string;
   leadVolume: string;
   schedulingComplexity: string;
   repetitiveTasks: string[];
+  customRepetitiveTask: string;
   existingTools: string[];
+  customTool: string;
   comfortLevel: string;
   budgetRange: string;
   primaryGoals: string[];
+  customGoal: string;
 }
 
 export default function AssessmentPage() {
@@ -121,16 +127,21 @@ export default function AssessmentPage() {
   const [form, setForm] = useState<FormData>({
     businessName: "",
     businessType: "",
+    customBusinessType: "",
     teamSize: "",
     painPoints: [],
+    customPainPoint: "",
     customerCommunicationVolume: "",
     leadVolume: "",
     schedulingComplexity: "",
     repetitiveTasks: [],
+    customRepetitiveTask: "",
     existingTools: [],
+    customTool: "",
     comfortLevel: "",
     budgetRange: "",
     primaryGoals: [],
+    customGoal: "",
   });
 
   const toggleArrayItem = (field: keyof FormData, value: string) => {
@@ -158,9 +169,10 @@ export default function AssessmentPage() {
 
   const handleSubmit = () => {
     setLoading(true);
+    saveAssessmentData(form);
     setTimeout(() => {
       localStorage.setItem("clearpath_has_assessment", "true");
-      router.push("/reports/rpt_001?new=true");
+      router.push("/reports/latest?new=true");
     }, 2000);
   };
 
@@ -185,7 +197,7 @@ export default function AssessmentPage() {
           <StepBusinessInfo form={form} setForm={setForm} />
         )}
         {currentStep === 1 && (
-          <StepPainPoints form={form} toggleArrayItem={toggleArrayItem} />
+          <StepPainPoints form={form} setForm={setForm} toggleArrayItem={toggleArrayItem} />
         )}
         {currentStep === 2 && (
           <StepOperations form={form} setForm={setForm} toggleArrayItem={toggleArrayItem} />
@@ -246,7 +258,7 @@ function StepBusinessInfo({
 
       <Input
         label="Business Name"
-        placeholder="e.g., Bright Smiles Dental"
+        placeholder="e.g., Your Business Name"
         value={form.businessName}
         onChange={(e) => setForm({ ...form, businessName: e.target.value })}
       />
@@ -258,6 +270,15 @@ function StepBusinessInfo({
         value={form.businessType}
         onChange={(e) => setForm({ ...form, businessType: e.target.value })}
       />
+
+      {form.businessType === "other" && (
+        <Input
+          label="Describe your business type"
+          placeholder="e.g., Event planning, Pet grooming, Tutoring"
+          value={form.customBusinessType}
+          onChange={(e) => setForm({ ...form, customBusinessType: e.target.value })}
+        />
+      )}
 
       <Select
         label="Team Size"
@@ -280,9 +301,11 @@ function StepBusinessInfo({
 
 function StepPainPoints({
   form,
+  setForm,
   toggleArrayItem,
 }: {
   form: FormData;
+  setForm: (f: FormData) => void;
   toggleArrayItem: (field: keyof FormData, value: string) => void;
 }) {
   return (
@@ -309,6 +332,15 @@ function StepPainPoints({
           />
         ))}
       </div>
+
+      {form.painPoints.includes("other") && (
+        <Input
+          label="Describe your other pain point"
+          placeholder="e.g., Managing vendor relationships"
+          value={form.customPainPoint}
+          onChange={(e) => setForm({ ...form, customPainPoint: e.target.value })}
+        />
+      )}
 
       {form.painPoints.length > 0 && (
         <p className="text-sm text-brand-600 font-medium">
@@ -352,7 +384,7 @@ function StepOperations({
         <Select
           label="Lead Volume"
           options={volumeOptions}
-          placeholder="How many new leads per day?"
+          placeholder="How many new potential customers or inquiries per day?"
           value={form.leadVolume}
           onChange={(e) => setForm({ ...form, leadVolume: e.target.value })}
         />
@@ -379,7 +411,22 @@ function StepOperations({
               onToggle={() => toggleArrayItem("repetitiveTasks", task)}
             />
           ))}
+          <ToggleChip
+            label="Other"
+            selected={form.repetitiveTasks.includes("__other__")}
+            onToggle={() => toggleArrayItem("repetitiveTasks", "__other__")}
+          />
         </div>
+        {form.repetitiveTasks.includes("__other__") && (
+          <div className="mt-3">
+            <Input
+              label="Describe your other repetitive task"
+              placeholder="e.g., Manually updating spreadsheets"
+              value={form.customRepetitiveTask}
+              onChange={(e) => setForm({ ...form, customRepetitiveTask: e.target.value })}
+            />
+          </div>
+        )}
       </div>
 
       <div>
@@ -395,7 +442,22 @@ function StepOperations({
               onToggle={() => toggleArrayItem("existingTools", tool)}
             />
           ))}
+          <ToggleChip
+            label="Other"
+            selected={form.existingTools.includes("__other__")}
+            onToggle={() => toggleArrayItem("existingTools", "__other__")}
+          />
         </div>
+        {form.existingTools.includes("__other__") && (
+          <div className="mt-3">
+            <Input
+              label="Describe your other tool"
+              placeholder="e.g., Custom CRM, industry-specific software"
+              value={form.customTool}
+              onChange={(e) => setForm({ ...form, customTool: e.target.value })}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -436,6 +498,16 @@ function StepGoalsBudget({
             />
           ))}
         </div>
+        {form.primaryGoals.includes("other") && (
+          <div className="mt-3">
+            <Input
+              label="Describe your other goal"
+              placeholder="e.g., Improve team collaboration"
+              value={form.customGoal}
+              onChange={(e) => setForm({ ...form, customGoal: e.target.value })}
+            />
+          </div>
+        )}
       </div>
 
       <div className="flex items-center gap-3 mb-2">
@@ -459,20 +531,48 @@ function StepGoalsBudget({
 }
 
 function StepReview({ form }: { form: FormData }) {
+  // Build display-friendly values including custom "other" entries
+  const painPointDisplay = form.painPoints
+    .map((p) => {
+      if (p === "other" && form.customPainPoint) return form.customPainPoint;
+      return painPointLabels[p] || p;
+    })
+    .join(", ") || "—";
+
+  const repTaskDisplay = form.repetitiveTasks
+    .filter((t) => t !== "__other__")
+    .concat(form.customRepetitiveTask ? [form.customRepetitiveTask] : [])
+    .join(", ") || "—";
+
+  const toolsDisplay = form.existingTools
+    .filter((t) => t !== "__other__")
+    .concat(form.customTool ? [form.customTool] : [])
+    .join(", ") || "—";
+
+  const goalsDisplay = form.primaryGoals
+    .map((g) => {
+      if (g === "other" && form.customGoal) return form.customGoal;
+      return goalLabels[g] || g;
+    })
+    .join(", ") || "—";
+
   const entries = [
     { label: "Business Name", value: form.businessName || "—" },
     {
       label: "Business Type",
-      value: businessTypeOptions.find((o) => o.value === form.businessType)?.label || "—",
+      value:
+        form.businessType === "other" && form.customBusinessType
+          ? form.customBusinessType
+          : businessTypeOptions.find((o) => o.value === form.businessType)?.label || "—",
     },
     {
       label: "Team Size",
       value: teamSizeOptions.find((o) => o.value === form.teamSize)?.label || "—",
     },
-    { label: "Pain Points", value: form.painPoints.map((p) => painPointLabels[p]).join(", ") || "—" },
-    { label: "Repetitive Tasks", value: form.repetitiveTasks.join(", ") || "—" },
-    { label: "Current Tools", value: form.existingTools.join(", ") || "—" },
-    { label: "Goals", value: form.primaryGoals.map((g) => goalLabels[g]).join(", ") || "—" },
+    { label: "Pain Points", value: painPointDisplay },
+    { label: "Repetitive Tasks", value: repTaskDisplay },
+    { label: "Current Tools", value: toolsDisplay },
+    { label: "Goals", value: goalsDisplay },
     {
       label: "Budget",
       value: budgetOptions.find((o) => o.value === form.budgetRange)?.label || "—",

@@ -88,6 +88,7 @@ export const painPointLabels: Record<string, string> = {
   reporting: "Reporting & Analytics",
   hiring: "Hiring & Recruitment",
   customer_support: "Customer Support",
+  other: "Other",
 };
 
 export const goalLabels: Record<string, string> = {
@@ -97,4 +98,5 @@ export const goalLabels: Record<string, string> = {
   reduce_manual_work: "Reduce Manual Work",
   grow_business: "Grow the Business",
   reduce_costs: "Reduce Costs",
+  other: "Other",
 };

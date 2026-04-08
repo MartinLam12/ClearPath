@@ -3,8 +3,9 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { Card, Badge, Button, ScoreRing, ProgressBar } from "@/components/ui";
-import { mockDashboardStats, mockReportsList, mockReport } from "@/lib/mock-data";
 import { useUser } from "@/lib/user-context";
+import { loadAssessmentData, generateReport } from "@/lib/report-generator";
+import { AssessmentReport } from "@/lib/types";
 import { formatDate, businessTypeLabels } from "@/lib/utils";
 import {
   ArrowRight,
@@ -21,6 +22,7 @@ import {
 
 export default function DashboardPage() {
   const [hasAssessments, setHasAssessments] = useState(false);
+  const [report, setReport] = useState<AssessmentReport | null>(null);
   const { user } = useUser();
   const firstName = user.name ? user.name.split(" ")[0] : "there";
 
@@ -28,6 +30,10 @@ export default function DashboardPage() {
     const completed = localStorage.getItem("clearpath_has_assessment");
     if (completed === "true") {
       setHasAssessments(true);
+      const data = loadAssessmentData();
+      if (data) {
+        setReport(generateReport(data));
+      }
     }
   }, []);
 
@@ -50,8 +56,8 @@ export default function DashboardPage() {
         </Link>
       </div>
 
-      {hasAssessments ? (
-        <DashboardWithData />
+      {hasAssessments && report ? (
+        <DashboardWithData report={report} />
       ) : (
         <EmptyDashboard />
       )}
@@ -182,7 +188,13 @@ function EmptyDashboard() {
 
 // ============ Dashboard With Data ============
 
-function DashboardWithData() {
+function DashboardWithData({ report }: { report: AssessmentReport }) {
+  // Compute summary stats from the dynamic report
+  const topOpportunity = report.recommendations[0]?.title || "N/A";
+  const totalTimeSaved = report.recommendations
+    .map((r) => r.estimatedTimeSaved)
+    .filter(Boolean)[0] || "—";
+
   return (
     <>
       {/* Stats Grid */}
@@ -190,26 +202,26 @@ function DashboardWithData() {
         <StatCard
           icon={<FileText className="w-5 h-5 text-brand-600" />}
           label="Assessments"
-          value={String(mockDashboardStats.totalAssessments)}
+          value="1"
           bgColor="bg-brand-50"
         />
         <StatCard
           icon={<BarChart3 className="w-5 h-5 text-accent-600" />}
-          label="Avg. Score"
-          value={`${mockDashboardStats.averageScore}/100`}
+          label="Readiness Score"
+          value={`${report.readinessScore}/100`}
           bgColor="bg-accent-50"
         />
         <StatCard
           icon={<Lightbulb className="w-5 h-5 text-warning-500" />}
           label="Top Opportunity"
-          value={mockDashboardStats.topOpportunity}
+          value={topOpportunity}
           small
           bgColor="bg-warning-50"
         />
         <StatCard
           icon={<Clock className="w-5 h-5 text-success-500" />}
           label="Est. Time Saved"
-          value={mockDashboardStats.estimatedTimeSaved}
+          value={totalTimeSaved}
           bgColor="bg-success-50"
         />
       </div>
@@ -220,17 +232,19 @@ function DashboardWithData() {
           <div className="flex flex-col items-center text-center">
             <h2 className="text-sm font-medium text-surface-500 mb-4">Latest AI Readiness Score</h2>
             <ScoreRing
-              score={mockReport.readinessScore}
+              score={report.readinessScore}
               size="lg"
               sublabel={`/ 100`}
             />
             <Badge variant="brand" className="mt-4" size="md">
-              {mockReport.readinessLevel}
+              {report.readinessLevel}
             </Badge>
             <p className="text-sm text-surface-500 mt-3 max-w-xs">
-              Your business is well positioned to start adopting AI tools in key areas.
+              {report.readinessScore >= 60
+                ? "Your business is well positioned to start adopting AI tools in key areas."
+                : "There are clear opportunities to start implementing AI solutions for your business."}
             </p>
-            <Link href="/reports/rpt_001" className="mt-4">
+            <Link href="/reports/latest" className="mt-4">
               <Button variant="outline" size="sm" icon={<ArrowRight className="w-4 h-4" />}>
                 View Full Report
               </Button>
@@ -242,7 +256,7 @@ function DashboardWithData() {
         <Card className="lg:col-span-2">
           <h2 className="text-sm font-medium text-surface-500 mb-6">Readiness by Category</h2>
           <div className="space-y-5">
-            {mockReport.categoryScores.map((cat) => (
+            {report.categoryScores.map((cat) => (
               <div key={cat.category}>
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-sm font-medium text-surface-700">{cat.category}</span>
@@ -265,14 +279,14 @@ function DashboardWithData() {
       <div>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-surface-900">Top Recommendations</h2>
-          <Link href="/reports/rpt_001">
+          <Link href="/reports/latest">
             <Button variant="ghost" size="sm" icon={<ArrowRight className="w-4 h-4" />}>
               View All
             </Button>
           </Link>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {mockReport.recommendations.slice(0, 3).map((rec, idx) => (
+          {report.recommendations.slice(0, 3).map((rec, idx) => (
             <Card key={rec.id} hover>
               <div className="flex items-center gap-2 mb-3">
                 <div className="w-8 h-8 rounded-lg bg-brand-50 flex items-center justify-center">
@@ -310,47 +324,44 @@ function DashboardWithData() {
         </div>
         <Card padding="none">
           <div className="divide-y divide-surface-100">
-            {mockReportsList.map((report) => (
-              <Link
-                key={report.id}
-                href={`/reports/${report.id}`}
-                className="flex items-center justify-between p-4 md:p-5 hover:bg-surface-50 transition-colors"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-brand-50 flex items-center justify-center">
-                    <FileText className="w-5 h-5 text-brand-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-surface-900">
-                      {report.businessName}
-                    </p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-xs text-surface-500">
-                        {formatDate(report.createdAt)}
-                      </span>
-                      <span className="text-xs text-surface-300">•</span>
-                      <span className="text-xs text-surface-500">
-                        {businessTypeLabels[report.businessType]}
-                      </span>
-                    </div>
+            <Link
+              href="/reports/latest"
+              className="flex items-center justify-between p-4 md:p-5 hover:bg-surface-50 transition-colors"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-xl bg-brand-50 flex items-center justify-center">
+                  <FileText className="w-5 h-5 text-brand-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-surface-900">
+                    {report.businessName}
+                  </p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-xs text-surface-500">
+                      {formatDate(report.createdAt)}
+                    </span>
+                    <span className="text-xs text-surface-300">•</span>
+                    <span className="text-xs text-surface-500">
+                      {report.businessTypeDisplay || businessTypeLabels[report.businessType]}
+                    </span>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <div className="text-right hidden sm:block">
-                    <p className="text-sm font-semibold text-surface-900">
-                      {report.readinessScore}/100
-                    </p>
-                    <Badge
-                      variant={report.readinessScore >= 60 ? "brand" : "warning"}
-                      size="sm"
-                    >
-                      {report.readinessLevel}
-                    </Badge>
-                  </div>
-                  <ArrowRight className="w-4 h-4 text-surface-400" />
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="text-right hidden sm:block">
+                  <p className="text-sm font-semibold text-surface-900">
+                    {report.readinessScore}/100
+                  </p>
+                  <Badge
+                    variant={report.readinessScore >= 60 ? "brand" : "warning"}
+                    size="sm"
+                  >
+                    {report.readinessLevel}
+                  </Badge>
                 </div>
-              </Link>
-            ))}
+                <ArrowRight className="w-4 h-4 text-surface-400" />
+              </div>
+            </Link>
           </div>
         </Card>
       </div>

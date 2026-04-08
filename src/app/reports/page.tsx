@@ -1,13 +1,45 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { Card, Badge, Button } from "@/components/ui";
-import { mockReportsList } from "@/lib/mock-data";
+import { loadAssessmentData, generateReport } from "@/lib/report-generator";
 import { formatDate, businessTypeLabels } from "@/lib/utils";
 import { ArrowRight, FileText, Plus } from "lucide-react";
 
+interface ReportSummary {
+  id: string;
+  createdAt: string;
+  businessName: string;
+  readinessScore: number;
+  readinessLevel: string;
+  businessType: string;
+  businessTypeDisplay?: string;
+}
+
 export default function ReportsListPage() {
+  const [reports, setReports] = useState<ReportSummary[]>([]);
+
+  useEffect(() => {
+    const hasAssessment = localStorage.getItem("clearpath_has_assessment") === "true";
+    if (hasAssessment) {
+      const data = loadAssessmentData();
+      if (data) {
+        const generated = generateReport(data);
+        setReports([
+          {
+            id: "latest",
+            createdAt: generated.createdAt,
+            businessName: generated.businessName,
+            readinessScore: generated.readinessScore,
+            readinessLevel: generated.readinessLevel,
+            businessType: generated.businessType,
+            businessTypeDisplay: generated.businessTypeDisplay,
+          },
+        ]);
+      }
+    }
+  }, []);
   return (
     <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -22,7 +54,7 @@ export default function ReportsListPage() {
         </Link>
       </div>
 
-      {mockReportsList.length === 0 ? (
+      {reports.length === 0 ? (
         <Card className="text-center py-16">
           <FileText className="w-12 h-12 text-surface-300 mx-auto mb-4" />
           <h2 className="text-lg font-semibold text-surface-700 mb-2">
@@ -40,7 +72,7 @@ export default function ReportsListPage() {
         </Card>
       ) : (
         <div className="space-y-3">
-          {mockReportsList.map((report) => (
+          {reports.map((report) => (
             <Link key={report.id} href={`/reports/${report.id}`}>
               <Card hover className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-4">
@@ -55,7 +87,7 @@ export default function ReportsListPage() {
                       </span>
                       <span className="text-sm text-surface-300">•</span>
                       <span className="text-sm text-surface-500">
-                        {businessTypeLabels[report.businessType]}
+                        {report.businessTypeDisplay || businessTypeLabels[report.businessType]}
                       </span>
                     </div>
                   </div>
