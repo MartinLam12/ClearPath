@@ -115,14 +115,6 @@ Get these values from your Supabase project dashboard under **Project Settings �
 - **Security Headers** — CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy
 - **Session Management** — Secure HTTP-only cookies via Supabase SSR
 
-## Design
-
-- Clean, modern, premium B2B SaaS aesthetic
-- Warm neutrals with a strong green accent (`#3b8a6a` / `#2d6f54`)
-- Strong typography, thoughtful spacing, soft shadows
-- High-trust, professional feel — no flashy AI clichés
-- Fully responsive on desktop and mobile
-
 ## Scripts
 
 ```bash
