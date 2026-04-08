@@ -3,7 +3,8 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { Card, Badge, Button, ScoreRing, ProgressBar } from "@/components/ui";
-import { mockUser, mockDashboardStats, mockReportsList, mockReport } from "@/lib/mock-data";
+import { mockDashboardStats, mockReportsList, mockReport } from "@/lib/mock-data";
+import { useUser } from "@/lib/user-context";
 import { formatDate, businessTypeLabels } from "@/lib/utils";
 import {
   ArrowRight,
@@ -20,6 +21,8 @@ import {
 
 export default function DashboardPage() {
   const [hasAssessments, setHasAssessments] = useState(false);
+  const { user } = useUser();
+  const firstName = user.name ? user.name.split(" ")[0] : "there";
 
   useEffect(() => {
     const completed = localStorage.getItem("clearpath_has_assessment");
@@ -34,7 +37,7 @@ export default function DashboardPage() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-surface-900">
-            Welcome{hasAssessments ? ` back` : ""}, {mockUser.name.split(" ")[0]}
+            Welcome{hasAssessments ? ` back` : ""}, {firstName}
           </h1>
           <p className="text-surface-500 mt-1">
             {hasAssessments

@@ -2,13 +2,19 @@
 
 import React, { useState } from "react";
 import { Card, CardTitle, CardDescription, Button, Input, Select } from "@/components/ui";
-import { mockUser } from "@/lib/mock-data";
+import { useUser } from "@/lib/user-context";
 import { Save, User, Building2, Bell } from "lucide-react";
 
 export default function SettingsPage() {
+  const { user, updateUser, initials, clearUser } = useUser();
   const [saved, setSaved] = useState(false);
 
+  const [name, setName] = useState(user.name);
+  const [email, setEmail] = useState(user.email);
+  const [businessName, setBusinessName] = useState(user.businessName);
+
   const handleSave = () => {
+    updateUser({ name, email, businessName });
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
@@ -39,13 +45,13 @@ export default function SettingsPage() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input label="Full Name" defaultValue={mockUser.name} />
-          <Input label="Email" type="email" defaultValue={mockUser.email} />
+          <Input label="Full Name" value={name} onChange={(e) => setName(e.target.value)} />
+          <Input label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
         </div>
 
         <div className="mt-4 flex items-center gap-4">
           <div className="w-16 h-16 rounded-full bg-brand-100 flex items-center justify-center">
-            <span className="text-xl font-bold text-brand-700">SC</span>
+            <span className="text-xl font-bold text-brand-700">{initials || "?"}</span>
           </div>
           <div>
             <Button variant="outline" size="sm">Change Photo</Button>
@@ -67,7 +73,7 @@ export default function SettingsPage() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input label="Business Name" defaultValue={mockUser.businessName} />
+          <Input label="Business Name" value={businessName} onChange={(e) => setBusinessName(e.target.value)} />
           <Select
             label="Industry"
             defaultValue="healthcare"
@@ -131,7 +137,7 @@ export default function SettingsPage() {
               Permanently delete your account and all data
             </p>
           </div>
-          <Button variant="danger" size="sm">Delete Account</Button>
+          <Button variant="danger" size="sm" onClick={() => { clearUser(); window.location.href = "/"; }}>Delete Account</Button>
         </div>
       </Card>
 

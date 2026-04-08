@@ -4,15 +4,27 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button, Input } from "@/components/ui";
+import { useUser } from "@/lib/user-context";
 import { ArrowRight } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { user, updateUser } = useUser();
   const [loading, setLoading] = useState(false);
+  const [email, setEmail] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    // If no stored profile, create a minimal one from the email
+    if (!user.name) {
+      const namePart = email.split("@")[0].replace(/[._-]/g, " ");
+      const capitalized = namePart
+        .split(" ")
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(" ");
+      updateUser({ name: capitalized, email });
+    }
     setTimeout(() => {
       router.push("/dashboard");
     }, 1000);
@@ -41,7 +53,9 @@ export default function LoginPage() {
             <Input
               label="Email"
               type="email"
-              placeholder="sarah@yourbusiness.com"
+              placeholder="you@yourbusiness.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               required
             />
             <Input

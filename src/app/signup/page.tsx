@@ -4,15 +4,21 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button, Input } from "@/components/ui";
+import { useUser } from "@/lib/user-context";
 import { ArrowRight } from "lucide-react";
 
 export default function SignupPage() {
   const router = useRouter();
+  const { setUser } = useUser();
   const [loading, setLoading] = useState(false);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [businessName, setBusinessName] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setUser({ name, email, businessName });
     setTimeout(() => {
       router.push("/dashboard");
     }, 1000);
@@ -41,19 +47,25 @@ export default function SignupPage() {
             <Input
               label="Full Name"
               type="text"
-              placeholder="Sarah Chen"
+              placeholder="John Doe"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
               required
             />
             <Input
               label="Work Email"
               type="email"
-              placeholder="sarah@yourbusiness.com"
+              placeholder="john@yourbusiness.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               required
             />
             <Input
               label="Business Name"
               type="text"
               placeholder="Your Business Name"
+              value={businessName}
+              onChange={(e) => setBusinessName(e.target.value)}
               required
             />
             <Input

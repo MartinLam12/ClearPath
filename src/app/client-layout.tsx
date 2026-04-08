@@ -4,6 +4,7 @@ import React from "react";
 import { usePathname } from "next/navigation";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
+import { UserProvider } from "@/lib/user-context";
 import { cn } from "@/lib/utils";
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
@@ -13,7 +14,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   const isApp = !isLanding && !isAuth;
 
   return (
-    <>
+    <UserProvider>
       <Navbar />
       <div
         className={cn(
@@ -25,6 +26,6 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
         <main className="flex-1">{children}</main>
       </div>
       {isLanding && <Footer />}
-    </>
+    </UserProvider>
   );
 }
