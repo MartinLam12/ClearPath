@@ -2,32 +2,39 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button, Input } from "@/components/ui";
-import { useUser } from "@/lib/user-context";
+import { createClient } from "@/lib/supabase/client";
 import { ArrowRight } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { user, updateUser } = useUser();
+  const searchParams = useSearchParams();
+  const supabase = createClient();
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
     setLoading(true);
-    // If no stored profile, create a minimal one from the email
-    if (!user.name) {
-      const namePart = email.split("@")[0].replace(/[._-]/g, " ");
-      const capitalized = namePart
-        .split(" ")
-        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-        .join(" ");
-      updateUser({ name: capitalized, email });
+
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (signInError) {
+      setError(signInError.message);
+      setLoading(false);
+      return;
     }
-    setTimeout(() => {
-      router.push("/dashboard");
-    }, 1000);
+
+    // Redirect to where the user was trying to go, or dashboard
+    const redirect = searchParams.get("redirect") || "/dashboard";
+    router.push(redirect);
   };
 
   return (
@@ -49,6 +56,11 @@ export default function LoginPage() {
         </div>
 
         <div className="bg-white rounded-2xl border border-surface-200 shadow-soft-md p-8">
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm mb-4">
+              {error}
+            </div>
+          )}
           <form onSubmit={handleSubmit} className="space-y-4">
             <Input
               label="Email"
@@ -62,22 +74,10 @@ export default function LoginPage() {
               label="Password"
               type="password"
               placeholder="Enter your password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               required
             />
-
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 text-sm text-surface-600">
-                <input type="checkbox" className="rounded border-surface-300" />
-                Remember me
-              </label>
-              <button
-                type="button"
-                onClick={() => alert("Please contact support at hello@clearpath.ai to reset your password.")}
-                className="text-sm text-brand-600 hover:underline"
-              >
-                Forgot password?
-              </button>
-            </div>
 
             <Button
               type="submit"

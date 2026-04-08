@@ -122,8 +122,8 @@ function AppNavbar() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleSignOut = () => {
-    clearUser();
+  const handleSignOut = async () => {
+    await clearUser();
     window.location.href = "/";
   };
 

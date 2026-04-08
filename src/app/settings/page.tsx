@@ -134,7 +134,7 @@ export default function SettingsPage() {
               Permanently delete your account and all data
             </p>
           </div>
-          <Button variant="danger" size="sm" onClick={() => { clearUser(); window.location.href = "/"; }}>Delete Account</Button>
+          <Button variant="danger" size="sm" onClick={async () => { await clearUser(); window.location.href = "/"; }}>Delete Account</Button>
         </div>
       </Card>
 

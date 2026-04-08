@@ -4,24 +4,49 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button, Input } from "@/components/ui";
-import { useUser } from "@/lib/user-context";
+import { createClient } from "@/lib/supabase/client";
 import { ArrowRight } from "lucide-react";
 
 export default function SignupPage() {
   const router = useRouter();
-  const { setUser } = useUser();
+  const supabase = createClient();
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [businessName, setBusinessName] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
+
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters.");
+      return;
+    }
+
     setLoading(true);
-    setUser({ name, email, businessName });
-    setTimeout(() => {
-      router.push("/dashboard");
-    }, 1000);
+
+    const { error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          name,
+          business_name: businessName,
+        },
+      },
+    });
+
+    if (signUpError) {
+      setError(signUpError.message);
+      setLoading(false);
+      return;
+    }
+
+    // Supabase auto-signs in after signup (if email confirmation is disabled)
+    router.push("/dashboard");
   };
 
   return (
@@ -43,6 +68,11 @@ export default function SignupPage() {
         </div>
 
         <div className="bg-white rounded-2xl border border-surface-200 shadow-soft-md p-8">
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm mb-4">
+              {error}
+            </div>
+          )}
           <form onSubmit={handleSubmit} className="space-y-4">
             <Input
               label="Full Name"
@@ -73,6 +103,8 @@ export default function SignupPage() {
               type="password"
               placeholder="Create a strong password"
               hint="At least 8 characters"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               required
             />
 
