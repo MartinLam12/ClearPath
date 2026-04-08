@@ -169,13 +169,16 @@ function AppNavbar() {
             })}
           </div>
           <div className="border-t border-surface-100 pt-4">
-            <Link
-              href="/"
-              className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-surface-500 hover:bg-surface-50 hover:text-surface-900 transition-all duration-200"
+            <button
+              onClick={() => {
+                localStorage.removeItem("clearpath_has_assessment");
+                window.location.href = "/";
+              }}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-surface-500 hover:bg-surface-50 hover:text-surface-900 transition-all duration-200 cursor-pointer"
             >
               <LogOut className="w-5 h-5" />
               Sign Out
-            </Link>
+            </button>
           </div>
         </nav>
       </aside>

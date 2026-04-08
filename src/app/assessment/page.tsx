@@ -159,6 +159,7 @@ export default function AssessmentPage() {
   const handleSubmit = () => {
     setLoading(true);
     setTimeout(() => {
+      localStorage.setItem("clearpath_has_assessment", "true");
       router.push("/reports/rpt_001?new=true");
     }, 2000);
   };

@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { Card, Badge, Button, ScoreRing, ProgressBar } from "@/components/ui";
 import { mockUser, mockDashboardStats, mockReportsList, mockReport } from "@/lib/mock-data";
@@ -8,25 +8,38 @@ import { formatDate, businessTypeLabels } from "@/lib/utils";
 import {
   ArrowRight,
   BarChart3,
+  ClipboardList,
   Clock,
   FileText,
   Lightbulb,
   Plus,
   TrendingUp,
   Zap,
+  Sparkles,
 } from "lucide-react";
 
 export default function DashboardPage() {
+  const [hasAssessments, setHasAssessments] = useState(false);
+
+  useEffect(() => {
+    const completed = localStorage.getItem("clearpath_has_assessment");
+    if (completed === "true") {
+      setHasAssessments(true);
+    }
+  }, []);
+
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-8">
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-surface-900">
-            Welcome back, {mockUser.name.split(" ")[0]}
+            Welcome{hasAssessments ? ` back` : ""}, {mockUser.name.split(" ")[0]}
           </h1>
           <p className="text-surface-500 mt-1">
-            Here&apos;s an overview of your AI readiness journey
+            {hasAssessments
+              ? "Here's an overview of your AI readiness journey"
+              : "Let's find out where AI can help your business"}
           </p>
         </div>
         <Link href="/assessment">
@@ -34,6 +47,141 @@ export default function DashboardPage() {
         </Link>
       </div>
 
+      {hasAssessments ? (
+        <DashboardWithData />
+      ) : (
+        <EmptyDashboard />
+      )}
+    </div>
+  );
+}
+
+// ============ Empty State for New Users ============
+
+function EmptyDashboard() {
+  return (
+    <>
+      {/* Welcome Hero Card */}
+      <Card className="gradient-subtle border-brand-100">
+        <div className="flex flex-col md:flex-row items-center gap-8 py-4">
+          <div className="w-20 h-20 rounded-2xl bg-brand-50 flex items-center justify-center shrink-0">
+            <Sparkles className="w-10 h-10 text-brand-600" />
+          </div>
+          <div className="flex-1 text-center md:text-left">
+            <h2 className="text-xl font-bold text-surface-900 mb-2">
+              Discover your AI advantage
+            </h2>
+            <p className="text-surface-600 leading-relaxed mb-4 max-w-xl">
+              Take a quick 5-minute assessment about your business — your industry, pain points,
+              tools, and goals. We&apos;ll generate a tailored AI readiness report with prioritized
+              recommendations and a concrete action plan.
+            </p>
+            <Link href="/assessment">
+              <Button size="lg" icon={<ArrowRight className="w-5 h-5" />}>
+                Start Your First Assessment
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </Card>
+
+      {/* What You'll Get */}
+      <div>
+        <h2 className="text-lg font-semibold text-surface-900 mb-4">
+          What you&apos;ll get
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[
+            {
+              icon: <BarChart3 className="w-5 h-5 text-brand-600" />,
+              bg: "bg-brand-50",
+              title: "AI Readiness Score",
+              description: "A clear score across 6 dimensions showing exactly where you stand.",
+            },
+            {
+              icon: <Lightbulb className="w-5 h-5 text-accent-600" />,
+              bg: "bg-accent-50",
+              title: "Prioritized Recommendations",
+              description: "Your top 3-5 AI opportunities ranked by impact and ease of implementation.",
+            },
+            {
+              icon: <ClipboardList className="w-5 h-5 text-success-500" />,
+              bg: "bg-success-50",
+              title: "Action Plan",
+              description: "A practical week-by-week plan with concrete steps to get started.",
+            },
+          ].map((item) => (
+            <Card key={item.title}>
+              <div className={`w-10 h-10 rounded-xl ${item.bg} flex items-center justify-center mb-3`}>
+                {item.icon}
+              </div>
+              <h3 className="text-sm font-semibold text-surface-900 mb-1">
+                {item.title}
+              </h3>
+              <p className="text-xs text-surface-500 leading-relaxed">
+                {item.description}
+              </p>
+            </Card>
+          ))}
+        </div>
+      </div>
+
+      {/* How It Works */}
+      <Card>
+        <h2 className="text-lg font-semibold text-surface-900 mb-6">
+          How it works
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {[
+            {
+              step: "1",
+              title: "Tell us about your business",
+              description: "Industry, team size, pain points, tools, and goals.",
+            },
+            {
+              step: "2",
+              title: "We analyze your situation",
+              description: "We match your inputs against hundreds of AI use cases.",
+            },
+            {
+              step: "3",
+              title: "Get your tailored report",
+              description: "Prioritized recommendations with impact estimates and next steps.",
+            },
+          ].map((item) => (
+            <div key={item.step} className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-full bg-brand-600 text-white flex items-center justify-center text-sm font-bold shrink-0">
+                {item.step}
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-surface-900">{item.title}</p>
+                <p className="text-xs text-surface-500 mt-0.5">{item.description}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* Empty History */}
+      <div>
+        <h2 className="text-lg font-semibold text-surface-900 mb-4">Assessment History</h2>
+        <Card className="text-center py-12">
+          <FileText className="w-10 h-10 text-surface-300 mx-auto mb-3" />
+          <p className="text-surface-500 text-sm mb-1">No assessments yet</p>
+          <p className="text-surface-400 text-xs">
+            Complete your first assessment to see your results here.
+          </p>
+        </Card>
+      </div>
+    </>
+  );
+}
+
+// ============ Dashboard With Data ============
+
+function DashboardWithData() {
+  return (
+    <>
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
@@ -203,7 +351,7 @@ export default function DashboardPage() {
           </div>
         </Card>
       </div>
-    </div>
+    </>
   );
 }
 
