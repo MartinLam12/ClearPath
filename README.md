@@ -1,4 +1,3 @@
-[//]: # (testing coderabbit)
 # ClearPath — AI Readiness for Small Business
 
 **ClearPath** helps small business owners discover where AI can create real value. Complete a guided 5-minute assessment and receive a tailored AI readiness report with prioritized recommendations, estimated impact, implementation difficulty, and a practical action plan.
@@ -85,6 +84,8 @@ Get these values from your Supabase project dashboard under **Project Settings �
 ├── next.config.ts             # Security headers & Next.js config
 ├── src/
 │   ├── app/
+│   │   ├── layout.tsx         # Root layout with providers
+│   │   ├── client-layout.tsx  # Client-side layout wrapper
 │   │   ├── page.tsx           # Landing page
 │   │   ├── login/             # Login page (Supabase Auth)
 │   │   ├── signup/            # Sign up page (Supabase Auth)
@@ -98,7 +99,7 @@ Get these values from your Supabase project dashboard under **Project Settings �
 │   │   ├── privacy/           # Privacy policy
 │   │   └── terms/             # Terms of service
 │   ├── components/
-│   │   ├── ui/                # Reusable UI (Button, Card, Input, Badge, ScoreRing, etc.)
+│   │   ├── ui/                # Reusable UI (Button, Card, Input, Badge, ScoreRing, ProgressBar, Stepper, ToggleChip, etc.)
 │   │   └── layout/            # Navbar, Footer
 │   └── lib/
 │       ├── supabase/          # Supabase client (browser) & server helpers
@@ -113,7 +114,7 @@ Get these values from your Supabase project dashboard under **Project Settings �
 
 - **Authentication** — Real email/password auth via Supabase (bcrypt-hashed, not stored client-side)
 - **Route Protection** — Server-side middleware redirects unauthenticated users
-- **Security Headers** — CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy
+- **Security Headers** — X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy set via `next.config.ts`; CSP with per-request nonces set in `middleware.ts`
 - **Session Management** — Secure HTTP-only cookies via Supabase SSR
 
 ## Scripts
