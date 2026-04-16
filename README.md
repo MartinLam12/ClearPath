@@ -1,3 +1,4 @@
+[//]: # (testing coderabbit)
 # ClearPath — AI Readiness for Small Business
 
 **ClearPath** helps small business owners discover where AI can create real value. Complete a guided 5-minute assessment and receive a tailored AI readiness report with prioritized recommendations, estimated impact, implementation difficulty, and a practical action plan.
