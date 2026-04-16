@@ -31,7 +31,7 @@ const sizeStyles: Record<ButtonSize, string> = {
   lg: "px-6 py-3 text-base rounded-xl gap-2",
 };
 
-export function Button({
+export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function Button({
   variant = "primary",
   size = "md",
   loading = false,
@@ -40,9 +40,10 @@ export function Button({
   className,
   disabled,
   ...props
-}: ButtonProps) {
+}: ButtonProps, ref) {
   return (
     <button
+      ref={ref}
       className={cn(
         "inline-flex items-center justify-center font-medium transition-all duration-200 cursor-pointer",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2",
@@ -81,4 +82,4 @@ export function Button({
       {children}
     </button>
   );
-}
+});
