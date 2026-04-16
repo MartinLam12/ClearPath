@@ -32,8 +32,10 @@ export default function LoginPage() {
       return;
     }
 
-    // Redirect to where the user was trying to go, or dashboard
-    const redirect = searchParams.get("redirect") || "/dashboard";
+    // Redirect to where the user was trying to go, or dashboard.
+    // Only allow relative paths starting with / (never // or http) to prevent open redirect.
+    const raw = searchParams.get("redirect") || "/dashboard";
+    const redirect = raw.startsWith("/") && !raw.startsWith("//") ? raw : "/dashboard";
     router.push(redirect);
   };
 
