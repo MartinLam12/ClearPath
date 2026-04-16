@@ -1,86 +1,11 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-// Routes that require authentication
 const protectedRoutes = ["/dashboard", "/assessment", "/reports", "/settings"];
-
-// Routes only accessible when NOT authenticated
 const authRoutes = ["/login", "/signup"];
 
-export async function middleware(request: NextRequest) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  // Generate a nonce for CSP
-  const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
-
-  // Skip auth checks if Supabase is not configured
-  if (!url || !key || !url.startsWith("http")) {
-    const response = NextResponse.next({ request });
-    response.headers.set("x-nonce", nonce);
-    setCSPHeaders(response, nonce);
-    return response;
-  }
-
-  let supabaseResponse = NextResponse.next({ request });
-
-  const supabase = createServerClient(
-    url,
-    key,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            request.cookies.set(name, value)
-          );
-          supabaseResponse = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          );
-        },
-      },
-    }
-  );
-
-  // Refresh the session (important for token rotation)
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const { pathname } = request.nextUrl;
-
-  // If user is NOT logged in and tries to access a protected route → redirect to /login
-  if (!user && protectedRoutes.some((route) => pathname.startsWith(route))) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    url.searchParams.set("redirect", pathname);
-    const redirectResponse = NextResponse.redirect(url);
-    redirectResponse.headers.set("x-nonce", nonce);
-    setCSPHeaders(redirectResponse, nonce);
-    return redirectResponse;
-  }
-
-  // If user IS logged in and tries to access login/signup → redirect to /dashboard
-  if (user && authRoutes.some((route) => pathname.startsWith(route))) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
-    const redirectResponse = NextResponse.redirect(url);
-    redirectResponse.headers.set("x-nonce", nonce);
-    setCSPHeaders(redirectResponse, nonce);
-    return redirectResponse;
-  }
-
-  // Add nonce to response headers
-  supabaseResponse.headers.set("x-nonce", nonce);
-  setCSPHeaders(supabaseResponse, nonce);
-  return supabaseResponse;
-}
-
-function setCSPHeaders(response: NextResponse, nonce: string) {
-  const cspHeader = [
+function buildCSP(nonce: string): string {
+  return [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
@@ -89,19 +14,86 @@ function setCSPHeaders(response: NextResponse, nonce: string) {
     "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
     "frame-ancestors 'none'",
   ].join("; ");
+}
 
-  response.headers.set("Content-Security-Policy", cspHeader);
+export async function middleware(request: NextRequest) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
+  const csp = buildCSP(nonce);
+
+  // Next.js reads the nonce from the CSP in request headers and applies it to
+  // its internal script tags — it must be on the request, not just the response.
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-nonce", nonce);
+  requestHeaders.set("Content-Security-Policy", csp);
+
+  if (!supabaseUrl || !supabaseKey || !supabaseUrl.startsWith("http")) {
+    const response = NextResponse.next({ request: { headers: requestHeaders } });
+    response.headers.set("x-nonce", nonce);
+    response.headers.set("Content-Security-Policy", csp);
+    return response;
+  }
+
+  let supabaseResponse = NextResponse.next({ request: { headers: requestHeaders } });
+
+  const supabase = createServerClient(supabaseUrl, supabaseKey, {
+    cookies: {
+      getAll() {
+        return request.cookies.getAll();
+      },
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value }) =>
+          request.cookies.set(name, value)
+        );
+        supabaseResponse = NextResponse.next({ request: { headers: requestHeaders } });
+        cookiesToSet.forEach(({ name, value, options }) =>
+          supabaseResponse.cookies.set(name, value, options)
+        );
+      },
+    },
+  });
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { pathname } = request.nextUrl;
+
+  if (!user && protectedRoutes.some((route) => pathname.startsWith(route))) {
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = "/login";
+    redirectUrl.searchParams.set("redirect", pathname);
+    const redirectResponse = NextResponse.redirect(redirectUrl);
+    redirectResponse.headers.set("x-nonce", nonce);
+    redirectResponse.headers.set("Content-Security-Policy", csp);
+    return redirectResponse;
+  }
+
+  if (user && authRoutes.some((route) => pathname.startsWith(route))) {
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = "/dashboard";
+    const redirectResponse = NextResponse.redirect(redirectUrl);
+    redirectResponse.headers.set("x-nonce", nonce);
+    redirectResponse.headers.set("Content-Security-Policy", csp);
+    return redirectResponse;
+  }
+
+  supabaseResponse.headers.set("x-nonce", nonce);
+  supabaseResponse.headers.set("Content-Security-Policy", csp);
+  return supabaseResponse;
 }
 
 export const config = {
   matcher: [
-    /*
-     * Match all routes except:
-     * - _next/static (static files)
-     * - _next/image (image optimization)
-     * - favicon.ico
-     * - public assets
-     */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    {
+      source:
+        "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+      missing: [
+        { type: "header", key: "next-router-prefetch" },
+        { type: "header", key: "purpose", value: "prefetch" },
+      ],
+    },
   ],
 };

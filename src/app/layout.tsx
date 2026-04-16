@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { ClientLayout } from "./client-layout";
+import { connection } from "next/server";
 
 export const metadata: Metadata = {
   title: "ClearPath — AI Readiness for Small Business",
@@ -8,11 +9,12 @@ export const metadata: Metadata = {
     "Discover where AI can create real value in your business. Get a tailored AI readiness report with prioritized recommendations and concrete next steps.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  await connection();
   return (
     <html lang="en" className="h-full antialiased">
       <head>
