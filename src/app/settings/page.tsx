@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Card, CardTitle, CardDescription, Button, Input, Select } from "@/components/ui";
 import { useUser } from "@/lib/user-context";
 import { Save, User, Building2, Bell, AlertTriangle } from "lucide-react";
@@ -11,10 +11,66 @@ export default function SettingsPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const deleteButtonRef = useRef<HTMLButtonElement>(null);
+  const modalInputRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState(user.name);
   const [email, setEmail] = useState(user.email);
   const [businessName, setBusinessName] = useState(user.businessName);
+
+  // Focus management and keyboard handling for modal
+  useEffect(() => {
+    if (showDeleteModal) {
+      // Store the element that opened the modal for focus restoration
+      const previouslyFocused = document.activeElement as HTMLElement;
+
+      // Focus the input when modal opens
+      modalInputRef.current?.focus();
+
+      // Handle Escape key to close modal
+      const handleEscape = (e: KeyboardEvent) => {
+        if (e.key === "Escape") {
+          setShowDeleteModal(false);
+          setDeleteConfirm("");
+          previouslyFocused?.focus();
+        }
+      };
+
+      // Handle Tab key to trap focus within modal
+      const handleTab = (e: KeyboardEvent) => {
+        if (e.key !== "Tab") return;
+
+        const modal = document.querySelector('[role="dialog"]');
+        if (!modal) return;
+
+        const focusableElements = modal.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        const firstElement = focusableElements[0];
+        const lastElement = focusableElements[focusableElements.length - 1];
+
+        if (e.shiftKey && document.activeElement === firstElement) {
+          e.preventDefault();
+          lastElement?.focus();
+        } else if (!e.shiftKey && document.activeElement === lastElement) {
+          e.preventDefault();
+          firstElement?.focus();
+        }
+      };
+
+      document.addEventListener("keydown", handleEscape);
+      document.addEventListener("keydown", handleTab);
+
+      return () => {
+        document.removeEventListener("keydown", handleEscape);
+        document.removeEventListener("keydown", handleTab);
+        // Restore focus when modal is closed
+        if (!showDeleteModal) {
+          previouslyFocused?.focus();
+        }
+      };
+    }
+  }, [showDeleteModal]);
 
   const handleSave = () => {
     updateUser({ name, email, businessName });
@@ -25,8 +81,26 @@ export default function SettingsPage() {
   const handleDeleteAccount = async () => {
     if (deleteConfirm !== "DELETE") return;
     setDeleting(true);
-    await clearUser();
-    window.location.href = "/";
+    try {
+      // Call the account deletion API
+      const response = await fetch("/api/account/delete", {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to delete account");
+      }
+
+      // Clear client state and redirect
+      await clearUser();
+      window.location.href = "/";
+    } catch (error) {
+      console.error("Failed to delete account:", error);
+      alert(error instanceof Error ? error.message : "Failed to delete account. Please try again.");
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -144,7 +218,14 @@ export default function SettingsPage() {
               Permanently delete your account and all data
             </p>
           </div>
-          <Button variant="danger" size="sm" onClick={() => setShowDeleteModal(true)}>Delete Account</Button>
+          <Button
+            ref={deleteButtonRef}
+            variant="danger"
+            size="sm"
+            onClick={() => setShowDeleteModal(true)}
+          >
+            Delete Account
+          </Button>
         </div>
       </Card>
 
@@ -158,20 +239,27 @@ export default function SettingsPage() {
       {/* Delete Account Confirmation Modal */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-          <div className="bg-white rounded-2xl shadow-soft-xl w-full max-w-md p-6 space-y-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-modal-title"
+            aria-describedby="delete-modal-description"
+            className="bg-white rounded-2xl shadow-soft-xl w-full max-w-md p-6 space-y-4"
+          >
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-danger-50 flex items-center justify-center shrink-0">
                 <AlertTriangle className="w-5 h-5 text-danger-600" />
               </div>
               <div>
-                <h2 className="text-base font-semibold text-surface-900">Delete Account</h2>
-                <p className="text-sm text-surface-500">This action is permanent and cannot be undone.</p>
+                <h2 id="delete-modal-title" className="text-base font-semibold text-surface-900">Delete Account</h2>
+                <p id="delete-modal-description" className="text-sm text-surface-500">This action is permanent and cannot be undone.</p>
               </div>
             </div>
             <p className="text-sm text-surface-600">
               Type <span className="font-mono font-semibold text-danger-700">DELETE</span> to confirm you want to permanently delete your account and all associated data.
             </p>
             <input
+              ref={modalInputRef}
               type="text"
               value={deleteConfirm}
               onChange={(e) => setDeleteConfirm(e.target.value)}

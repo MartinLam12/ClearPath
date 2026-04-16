@@ -11,9 +11,15 @@ export async function middleware(request: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
+  // Generate a nonce for CSP
+  const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
+
   // Skip auth checks if Supabase is not configured
   if (!url || !key || !url.startsWith("http")) {
-    return NextResponse.next();
+    const response = NextResponse.next({ request });
+    response.headers.set("x-nonce", nonce);
+    setCSPHeaders(response, nonce);
+    return response;
   }
 
   let supabaseResponse = NextResponse.next({ request });
@@ -51,17 +57,40 @@ export async function middleware(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("redirect", pathname);
-    return NextResponse.redirect(url);
+    const redirectResponse = NextResponse.redirect(url);
+    redirectResponse.headers.set("x-nonce", nonce);
+    setCSPHeaders(redirectResponse, nonce);
+    return redirectResponse;
   }
 
   // If user IS logged in and tries to access login/signup → redirect to /dashboard
   if (user && authRoutes.some((route) => pathname.startsWith(route))) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
-    return NextResponse.redirect(url);
+    const redirectResponse = NextResponse.redirect(url);
+    redirectResponse.headers.set("x-nonce", nonce);
+    setCSPHeaders(redirectResponse, nonce);
+    return redirectResponse;
   }
 
+  // Add nonce to response headers
+  supabaseResponse.headers.set("x-nonce", nonce);
+  setCSPHeaders(supabaseResponse, nonce);
   return supabaseResponse;
+}
+
+function setCSPHeaders(response: NextResponse, nonce: string) {
+  const cspHeader = [
+    "default-src 'self'",
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' data: blob:",
+    "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+    "frame-ancestors 'none'",
+  ].join("; ");
+
+  response.headers.set("Content-Security-Policy", cspHeader);
 }
 
 export const config = {
