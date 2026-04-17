@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Card, Input, Select, Stepper, ToggleChip } from "@/components/ui";
+import { Button, Card, Input, Textarea, Select, Stepper, ToggleChip } from "@/components/ui";
 import { ArrowLeft, ArrowRight, Building2, Users, AlertTriangle, Wrench, Target, DollarSign } from "lucide-react";
 import { painPointLabels, goalLabels } from "@/lib/utils";
 import { saveAssessmentData } from "@/lib/report-generator";
@@ -118,6 +118,7 @@ interface FormData {
   budgetRange: string;
   primaryGoals: string[];
   customGoal: string;
+  additionalContext: string;
 }
 
 export default function AssessmentPage() {
@@ -142,6 +143,7 @@ export default function AssessmentPage() {
     budgetRange: "",
     primaryGoals: [],
     customGoal: "",
+    additionalContext: "",
   });
 
   const toggleArrayItem = (field: keyof FormData, value: string) => {
@@ -526,6 +528,37 @@ function StepGoalsBudget({
         value={form.budgetRange}
         onChange={(e) => setForm({ ...form, budgetRange: e.target.value })}
       />
+
+      <div className="space-y-2">
+        <div className="flex items-start gap-3 p-4 bg-brand-50 rounded-xl">
+          <Zap className="w-4 h-4 text-brand-600 shrink-0 mt-0.5" />
+          <p className="text-sm text-brand-700">
+            <span className="font-semibold">The more context you add, the more specific your results will be.</span>{" "}
+            Tell us anything else about your business — your biggest frustrations, what you&apos;ve already tried, or specific goals you have in mind.
+          </p>
+        </div>
+        <Textarea
+          label="Additional Context (optional)"
+          placeholder="e.g., We tried using Zapier but found it too complex. Our biggest bottleneck is onboarding new clients — it takes us 3 hours per client manually..."
+          rows={5}
+          value={form.additionalContext}
+          onChange={(e) =>
+            setForm({
+              ...form,
+const MAX_ADDITIONAL_CONTEXT_LENGTH = 2000;
+
+interface FormData {
+  businessName: string;
+  businessType: string;
+  customBusinessType: string;
+          }
+        />
+        {form.additionalContext.length > 0 && (
+          <p className="text-xs text-surface-400 text-right">
+            {form.additionalContext.length}/{MAX_ADDITIONAL_CONTEXT_LENGTH} characters
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -577,6 +610,9 @@ function StepReview({ form }: { form: FormData }) {
       label: "Budget",
       value: budgetOptions.find((o) => o.value === form.budgetRange)?.label || "—",
     },
+    ...(form.additionalContext
+      ? [{ label: "Additional Context", value: form.additionalContext }]
+      : []),
   ];
 
   return (
