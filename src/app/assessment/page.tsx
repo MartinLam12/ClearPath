@@ -545,8 +545,12 @@ function StepGoalsBudget({
           onChange={(e) =>
             setForm({
               ...form,
-              additionalContext: e.target.value.slice(0, MAX_ADDITIONAL_CONTEXT_LENGTH),
-            })
+const MAX_ADDITIONAL_CONTEXT_LENGTH = 2000;
+
+interface FormData {
+  businessName: string;
+  businessType: string;
+  customBusinessType: string;
           }
         />
         {form.additionalContext.length > 0 && (
