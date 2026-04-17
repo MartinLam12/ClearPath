@@ -542,10 +542,17 @@ function StepGoalsBudget({
           placeholder="e.g., We tried using Zapier but found it too complex. Our biggest bottleneck is onboarding new clients — it takes us 3 hours per client manually..."
           rows={5}
           value={form.additionalContext}
-          onChange={(e) => setForm({ ...form, additionalContext: e.target.value })}
+          onChange={(e) =>
+            setForm({
+              ...form,
+              additionalContext: e.target.value.slice(0, MAX_ADDITIONAL_CONTEXT_LENGTH),
+            })
+          }
         />
         {form.additionalContext.length > 0 && (
-          <p className="text-xs text-surface-400 text-right">{form.additionalContext.length} characters</p>
+          <p className="text-xs text-surface-400 text-right">
+            {form.additionalContext.length}/{MAX_ADDITIONAL_CONTEXT_LENGTH} characters
+          </p>
         )}
       </div>
     </div>
