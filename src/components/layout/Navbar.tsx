@@ -61,9 +61,6 @@ function LandingNavbar() {
             <a href="#how-it-works" className="text-sm text-surface-600 hover:text-surface-900 transition-colors">
               How It Works
             </a>
-            <a href="#testimonials" className="text-sm text-surface-600 hover:text-surface-900 transition-colors">
-              Testimonials
-            </a>
           </nav>
 
           <div className="hidden md:flex items-center gap-3">
@@ -89,7 +86,6 @@ function LandingNavbar() {
           <div className="container-wide flex flex-col gap-3">
             <a href="#features" className="text-sm text-surface-600 py-2">Features</a>
             <a href="#how-it-works" className="text-sm text-surface-600 py-2">How It Works</a>
-            <a href="#testimonials" className="text-sm text-surface-600 py-2">Testimonials</a>
             <hr className="border-surface-100" />
             <Link href="/login">
               <Button variant="ghost" size="sm" className="w-full">Log In</Button>
