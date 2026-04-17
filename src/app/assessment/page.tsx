@@ -7,6 +7,8 @@ import { ArrowLeft, ArrowRight, Building2, Users, AlertTriangle, Wrench, Target,
 import { painPointLabels, goalLabels } from "@/lib/utils";
 import { saveAssessmentData } from "@/lib/report-generator";
 
+const MAX_ADDITIONAL_CONTEXT_LENGTH = 2000;
+
 const steps = [
   { label: "Business Info", description: "Basic details" },
   { label: "Pain Points", description: "Current challenges" },
@@ -545,12 +547,8 @@ function StepGoalsBudget({
           onChange={(e) =>
             setForm({
               ...form,
-const MAX_ADDITIONAL_CONTEXT_LENGTH = 2000;
-
-interface FormData {
-  businessName: string;
-  businessType: string;
-  customBusinessType: string;
+              additionalContext: e.target.value.slice(0, 2000),
+            })
           }
         />
         {form.additionalContext.length > 0 && (
