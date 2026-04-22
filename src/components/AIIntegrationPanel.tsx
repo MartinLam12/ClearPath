@@ -200,7 +200,6 @@ function renderSectionContent(content: string) {
             </div>
           </div>
         );
-        i++; // skip closing ---
       }
       i++;
       continue;
@@ -231,8 +230,13 @@ export function AIIntegrationPanel({ recommendations }: Props) {
 
     let raw = "";
     try {
-      const stored = localStorage.getItem("clearpath_assessment_data");
-      const assessmentData = stored ? JSON.parse(stored) : {};
+      let assessmentData = {};
+      try {
+        const stored = localStorage.getItem("clearpath_assessment_data");
+        assessmentData = stored ? JSON.parse(stored) : {};
+      } catch {
+        // localStorage unavailable or data corrupted — proceed with empty profile
+      }
 
       abortRef.current = new AbortController();
       const response = await fetch("/api/ai-integration", {

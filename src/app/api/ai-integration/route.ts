@@ -156,22 +156,32 @@ export async function POST(request: Request) {
     );
   }
 
-  if (
-    typeof body !== "object" ||
-    body === null ||
-    typeof (body as Record<string, unknown>).assessmentData !== "object" ||
-    !Array.isArray((body as Record<string, unknown>).recommendations)
-  ) {
+  const payload = body as Record<string, unknown>;
+  const rawAssessment = payload.assessmentData;
+  const rawRecommendations = payload.recommendations;
+
+  const hasValidAssessmentData =
+    typeof rawAssessment === "object" && rawAssessment !== null;
+
+  const hasValidRecommendations =
+    Array.isArray(rawRecommendations) &&
+    rawRecommendations.every(
+      (r) =>
+        typeof r === "object" &&
+        r !== null &&
+        typeof (r as Record<string, unknown>).title === "string" &&
+        typeof (r as Record<string, unknown>).toolCategory === "string"
+    );
+
+  if (!hasValidAssessmentData || !hasValidRecommendations) {
     return new Response(
       JSON.stringify({ error: "Missing required fields: assessmentData and recommendations" }),
       { status: 400, headers: { "Content-Type": "application/json" } }
     );
   }
 
-  const { assessmentData, recommendations } = body as {
-    assessmentData: AssessmentData;
-    recommendations: Recommendation[];
-  };
+  const assessmentData = rawAssessment as AssessmentData;
+  const recommendations = rawRecommendations as Recommendation[];
   const prompt = buildPrompt(assessmentData, recommendations);
 
   const stream = client.messages.stream({
@@ -199,8 +209,9 @@ export async function POST(request: Request) {
             controller.enqueue(encoder.encode(chunk.delta.text));
           }
         }
-      } finally {
         controller.close();
+      } catch (err) {
+        controller.error(err);
       }
     },
   });
