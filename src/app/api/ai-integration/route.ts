@@ -146,7 +146,7 @@ export async function POST(request: Request) {
     );
   }
 
-  let body: { assessmentData: AssessmentData; recommendations: Recommendation[] };
+  let body: unknown;
   try {
     body = await request.json();
   } catch {
@@ -156,7 +156,22 @@ export async function POST(request: Request) {
     );
   }
 
-  const { assessmentData, recommendations } = body;
+  if (
+    typeof body !== "object" ||
+    body === null ||
+    typeof (body as Record<string, unknown>).assessmentData !== "object" ||
+    !Array.isArray((body as Record<string, unknown>).recommendations)
+  ) {
+    return new Response(
+      JSON.stringify({ error: "Missing required fields: assessmentData and recommendations" }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  const { assessmentData, recommendations } = body as {
+    assessmentData: AssessmentData;
+    recommendations: Recommendation[];
+  };
   const prompt = buildPrompt(assessmentData, recommendations);
 
   const stream = client.messages.stream({
