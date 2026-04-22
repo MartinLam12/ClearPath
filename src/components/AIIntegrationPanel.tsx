@@ -56,11 +56,19 @@ function parseSections(raw: string): Section[] {
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, []);
+
   const handle = async () => {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      timeoutRef.current = setTimeout(() => setCopied(false), 2000);
     } catch {
       // clipboard not available
     }
@@ -430,12 +438,16 @@ export function AIIntegrationPanel({ recommendations }: Props) {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-hide">
+      <div role="tablist" className="flex gap-1 overflow-x-auto pb-1 scrollbar-hide">
         {sections.map((s) => {
           const def = SECTION_DEFS.find((d) => d.id === s.id);
           return (
             <button
               key={s.id}
+              role="tab"
+              id={`tab-${s.id}`}
+              aria-selected={activeTab === s.id}
+              aria-controls={`panel-${s.id}`}
               onClick={() => setActiveTab(s.id)}
               className={`flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg font-medium whitespace-nowrap transition-all ${
                 activeTab === s.id
@@ -452,7 +464,13 @@ export function AIIntegrationPanel({ recommendations }: Props) {
 
       {/* Active section */}
       {sections.map((s) => (
-        <div key={s.id} className={s.id === activeTab ? "block" : "hidden"}>
+        <div
+          key={s.id}
+          id={`panel-${s.id}`}
+          role="tabpanel"
+          aria-labelledby={`tab-${s.id}`}
+          className={s.id === activeTab ? "block" : "hidden"}
+        >
           <Card>
             <div className="flex items-center gap-2 mb-5 pb-4 border-b border-surface-100">
               <div className="w-8 h-8 rounded-lg bg-brand-100 flex items-center justify-center text-brand-600">
