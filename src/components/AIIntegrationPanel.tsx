@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import {
   Sparkles,
   Zap,
@@ -222,6 +222,10 @@ export function AIIntegrationPanel({ recommendations }: Props) {
   const [error, setError] = useState("");
   const abortRef = useRef<AbortController | null>(null);
 
+  useEffect(() => {
+    return () => { abortRef.current?.abort(); };
+  }, []);
+
   const generate = useCallback(async () => {
     setState("loading");
     setStreamedText("");
@@ -253,7 +257,8 @@ export function AIIntegrationPanel({ recommendations }: Props) {
 
       setState("streaming");
 
-      const reader = response.body!.getReader();
+      if (!response.body) throw new Error("Response body is empty");
+      const reader = response.body.getReader();
       const decoder = new TextDecoder();
 
       while (true) {
