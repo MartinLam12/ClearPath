@@ -1,36 +1,32 @@
-# ClearPath — AI Readiness for Small Business
+# ClearPath — AI Email Tools for Boxing Gyms
 
-**ClearPath** helps small business owners discover where AI can create real value. Complete a guided 5-minute assessment and receive a tailored AI readiness report with prioritized recommendations, estimated impact, implementation difficulty, and a practical action plan.
+**ClearPath** helps boxing gym owners save time on email. Get AI-drafted replies to incoming inquiries and send post-class follow-up emails to attendees — all in a few clicks.
 
 🔗 **Live:** [clearpathai-martinlam12s-projects.vercel.app](https://clearpathai-martinlam12s-projects.vercel.app)
+
+Built for a gym with 2 locations.
 
 ---
 
 ## Features
 
-- **Landing Page** — Polished marketing page with hero, features, how-it-works, results preview, and CTA
-- **Authentication** — Real email/password auth powered by Supabase (signup, login, session management)
-- **Route Protection** — Middleware-based auth guards redirect unauthenticated users to login
-- **Dashboard** — Overview with readiness score, category breakdown, top recommendations, and assessment history
-- **Assessment Wizard** — Multi-step guided form covering business info, pain points, operations, tools, goals, and budget
-- **Dynamic Report Engine** — Algorithmic report generator that produces tailored recommendations based on assessment responses
-- **AI Readiness Report** — Detailed report with score ring, prioritized recommendations, impact/difficulty ratings, action plan, strengths, and considerations
-- **Share & Export** — Share reports via Web Share API (with clipboard fallback) and export as PDF
-- **Settings** — Profile management, business info, and account deletion
-- **Static Pages** — About, Contact, Privacy Policy, and Terms of Service
+- **Email Reply Tool** — Paste any incoming email (membership questions, pricing, scheduling) and get an AI-drafted reply in seconds. Edit, then open directly in Gmail.
+- **Class Follow-Up Tool** — Log a class, generate a personalised follow-up email, add attendee addresses, and send via Gmail BCC in one click.
+- **Gym Settings** — Set your gym name and context once (locations, pricing, schedule) and every AI draft is personalised to your gym.
+- **Authentication** — Email/password auth powered by Supabase with protected routes.
+- **Settings** — Profile and account management.
 
 ## Tech Stack
 
 | Category | Technology |
 |---|---|
-| **Framework** | Next.js 16.2.2 (App Router, Turbopack) |
+| **Framework** | Next.js 16.2.2 (App Router) |
 | **Language** | TypeScript |
 | **Styling** | Tailwind CSS 4 with custom design tokens |
-| **Authentication** | Supabase Auth (@supabase/supabase-js, @supabase/ssr) |
-| **Charts** | Recharts |
+| **AI** | Google Gemini 1.5 Flash (via `@google/generative-ai`) |
+| **Authentication** | Supabase Auth |
 | **Animation** | Framer Motion |
 | **Icons** | Lucide React |
-| **Utilities** | clsx |
 | **Deployment** | Vercel |
 
 ## Getting Started
@@ -39,6 +35,7 @@
 
 - Node.js 18+
 - A [Supabase](https://supabase.com) project (free tier works)
+- A [Google AI Studio](https://aistudio.google.com) API key (free tier)
 
 ### Setup
 
@@ -52,7 +49,7 @@ npm install
 
 # Configure environment variables
 cp .env.local.example .env.local
-# Then fill in your Supabase credentials (see below)
+# Then fill in your credentials (see below)
 
 # Run development server
 npm run dev
@@ -62,65 +59,44 @@ Open [http://localhost:3000](http://localhost:3000) to view the app.
 
 ### Environment Variables
 
-Create a `.env.local` file in the project root:
-
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+GEMINI_API_KEY=your-gemini-api-key
 ```
 
-Get these values from your Supabase project dashboard under **Project Settings → API**.
-
-### Supabase Configuration
-
-1. Create a new project at [supabase.com](https://supabase.com)
-2. Go to **Authentication → Providers → Email** and disable "Confirm email" for development
-3. Copy your project URL and anon key into `.env.local`
+- Supabase credentials: **Project Settings → API** in your Supabase dashboard
+- Gemini API key: [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
 
 ## Project Structure
 
 ```
-├── middleware.ts              # Auth route protection
-├── next.config.ts             # Security headers & Next.js config
 ├── src/
 │   ├── app/
-│   │   ├── layout.tsx         # Root layout with providers
-│   │   ├── client-layout.tsx  # Client-side layout wrapper
-│   │   ├── page.tsx           # Landing page
-│   │   ├── login/             # Login page (Supabase Auth)
-│   │   ├── signup/            # Sign up page (Supabase Auth)
-│   │   ├── auth/callback/     # OAuth/email confirmation callback
-│   │   ├── dashboard/         # Dashboard with score overview
-│   │   ├── assessment/        # Multi-step assessment wizard
-│   │   ├── reports/           # Reports list & dynamic detail view
-│   │   ├── settings/          # Profile & account settings
-│   │   ├── about/             # About page
-│   │   ├── contact/           # Contact page
-│   │   ├── privacy/           # Privacy policy
-│   │   └── terms/             # Terms of service
+│   │   ├── page.tsx              # Landing page
+│   │   ├── dashboard/            # Home dashboard
+│   │   ├── inbox/                # Email reply tool
+│   │   ├── classes/              # Class follow-up tool
+│   │   ├── api/
+│   │   │   ├── draft-reply/      # Gemini route — draft email replies
+│   │   │   └── draft-followup/   # Gemini route — draft class follow-ups
+│   │   ├── login/ signup/        # Supabase auth pages
+│   │   ├── settings/             # Account settings
+│   │   └── auth/callback/        # Auth callback handler
 │   ├── components/
-│   │   ├── ui/                # Reusable UI (Button, Card, Input, Badge, ScoreRing, ProgressBar, Stepper, ToggleChip, etc.)
-│   │   └── layout/            # Navbar, Footer
+│   │   ├── ui/                   # Button, Card, Input, Badge, etc.
+│   │   └── layout/               # Navbar, Footer
 │   └── lib/
-│       ├── supabase/          # Supabase client (browser) & server helpers
-│       ├── user-context.tsx   # Auth context provider (Supabase + localStorage fallback)
-│       ├── report-generator.ts # Dynamic report generation engine
-│       ├── types.ts           # TypeScript type definitions
-│       ├── utils.ts           # Utility functions
-│       └── mock-data.ts       # Sample data for reports
+│       ├── supabase/             # Supabase client & server helpers
+│       ├── user-context.tsx      # Auth context provider
+│       ├── types.ts              # TypeScript types
+│       └── utils.ts              # Utility functions
 ```
-
-## Security
-
-- **Authentication** — Real email/password auth via Supabase (bcrypt-hashed, not stored client-side)
-- **Route Protection** — Server-side middleware redirects unauthenticated users
-- **Security Headers** — X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy set via `next.config.ts`; CSP with per-request nonces set in `middleware.ts`
-- **Session Management** — Secure HTTP-only cookies via Supabase SSR
 
 ## Scripts
 
 ```bash
-npm run dev       # Start dev server (Turbopack)
+npm run dev       # Start dev server
 npm run build     # Production build
 npm run start     # Start production server
 npm run lint      # Run ESLint
