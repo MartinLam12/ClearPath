@@ -19,6 +19,25 @@ import {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
+function cleanBody(text: string | null): string {
+  if (!text) return "";
+  if (!text.trimStart().startsWith("<")) return text;
+  return text
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n\n")
+    .replace(/<\/div>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 function timeAgo(dateStr: string | null): string {
   if (!dateStr) return "";
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -350,7 +369,7 @@ function MessageBubble({ message }: { message: EmailMessage }) {
         <p className={cn("text-xs mb-1 font-medium", isOutbound ? "text-brand-200" : "text-surface-400")}>
           {isOutbound ? "You" : message.from_email}
         </p>
-        <p className="whitespace-pre-wrap leading-relaxed">{message.body_text}</p>
+        <p className="whitespace-pre-wrap leading-relaxed">{cleanBody(message.body_text)}</p>
       </div>
     </div>
   );

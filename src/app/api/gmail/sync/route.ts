@@ -3,21 +3,57 @@ import { google } from "googleapis";
 import { createClient } from "@/lib/supabase/server";
 import type { gmail_v1 } from "googleapis";
 
+function stripHtml(html: string): string {
+  return html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n\n")
+    .replace(/<\/div>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function decode(data: string): string {
+  return Buffer.from(data, "base64url").toString("utf-8");
+}
+
 function extractBody(payload: gmail_v1.Schema$MessagePart | undefined): string {
   if (!payload) return "";
-  if (payload.body?.data) {
-    return Buffer.from(payload.body.data, "base64url").toString("utf-8");
+
+  // Prefer plain text at this level
+  if (payload.mimeType === "text/plain" && payload.body?.data) {
+    return decode(payload.body.data);
   }
+
+  // Fall back to HTML at this level, strip tags
+  if (payload.mimeType === "text/html" && payload.body?.data) {
+    return stripHtml(decode(payload.body.data));
+  }
+
   if (payload.parts) {
+    // First pass: find text/plain
     const textPart = payload.parts.find((p) => p.mimeType === "text/plain");
-    if (textPart?.body?.data) {
-      return Buffer.from(textPart.body.data, "base64url").toString("utf-8");
-    }
+    if (textPart?.body?.data) return decode(textPart.body.data);
+
+    // Second pass: find text/html and strip it
+    const htmlPart = payload.parts.find((p) => p.mimeType === "text/html");
+    if (htmlPart?.body?.data) return stripHtml(decode(htmlPart.body.data));
+
+    // Recurse into nested multipart
     for (const part of payload.parts) {
       const body = extractBody(part);
       if (body) return body;
     }
   }
+
   return "";
 }
 
