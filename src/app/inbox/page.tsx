@@ -358,84 +358,101 @@ function ThreadView({
 
 // ─── HTML email iframe ────────────────────────────────────────────────────────
 
-// Injected styles go BEFORE the email's own <style> blocks so the email wins.
-// We only set hard resets: max-width on images/tables, overflow wrap, and a
-// base target so all links open in a new tab.
-const BASE_INJECT = `
+// Upgrade http:// image/background sources to https:// to avoid mixed-content
+// blocking on our HTTPS deployment. Most CDNs support HTTPS at the same URL.
+function upgradeHttpUrls(html: string): string {
+  return html
+    .replace(/(<img[^>]+\bsrc\s*=\s*["'])http:\/\//gi, "$1https://")
+    .replace(/(<[^>]+\bbackground(?:-image)?\s*=\s*["'])http:\/\//gi, "$1https://")
+    .replace(/url\(\s*["']?http:\/\//gi, "url(https://");
+}
+
+// Styles injected BEFORE email's own <style> so the email's styles still win.
+// Hard limits only: image/table widths and word wrap.
+const BASE_STYLES = `
 <base target="_blank">
 <meta name="color-scheme" content="light">
-<style id="__clearpath_reset">
-  img { max-width: 100% !important; height: auto; }
-  table { max-width: 100% !important; }
-  body { word-wrap: break-word; overflow-wrap: break-word; }
+<style>
+  img{max-width:100%!important;height:auto}
+  table{max-width:100%!important}
+  body{word-wrap:break-word;overflow-wrap:break-word}
 </style>`;
 
-function buildSrcDoc(raw: string): string {
-  const isFullDoc = /<html\b/i.test(raw);
+// Runs inside the null-origin sandbox — reports height to parent via postMessage.
+// Uses allow-scripts (no allow-same-origin) so it cannot touch parent DOM.
+const HEIGHT_SCRIPT = `<script>
+(function(){
+  function h(){
+    var s=Math.max(
+      document.body?document.body.scrollHeight:0,
+      document.documentElement?document.documentElement.scrollHeight:0
+    );
+    if(s>0)window.parent.postMessage({__cpEmailH:s},'*');
+  }
+  window.addEventListener('load',function(){
+    h();
+    var imgs=document.querySelectorAll('img'),n=imgs.length;
+    if(!n)return;
+    imgs.forEach(function(i){
+      if(i.complete){if(!--n)h();}
+      else{
+        i.addEventListener('load',function(){if(!--n)h();},{once:true});
+        i.addEventListener('error',function(){if(!--n)h();},{once:true});
+      }
+    });
+  });
+  setTimeout(h,800);
+})();
+<\/script>`;
 
-  if (isFullDoc) {
-    // Inject after the opening <head> tag so email's own styles still override ours
-    const injected = raw.replace(/(<head[^>]*>)/i, `$1\n${BASE_INJECT}`);
-    // If there was no <head>, fall through to wrap it below
-    if (injected !== raw) return injected;
+function buildSrcDoc(raw: string): string {
+  const upgraded = upgradeHttpUrls(raw);
+  const inject = BASE_STYLES + HEIGHT_SCRIPT;
+
+  if (/<html\b/i.test(upgraded)) {
+    const result = upgraded.replace(/(<head[^>]*>)/i, `$1\n${inject}`);
+    if (result !== upgraded) return result;
   }
 
-  // Fragment or no <head> found — wrap in a minimal full document
+  // Fragment — wrap in a minimal document
   return `<!DOCTYPE html><html><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-${BASE_INJECT}
+${inject}
 <style>
   body{font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;
        margin:0;padding:16px;color:#333}
   a{color:#1a73e8}
 </style>
-</head><body>${raw}</body></html>`;
+</head><body>${upgraded}</body></html>`;
 }
 
 function EmailHtmlFrame({ html }: { html: string }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [height, setHeight] = useState(120);
 
   useEffect(() => {
-    const iframe = iframeRef.current;
-    if (!iframe) return;
-
-    const fit = () => {
-      try {
-        const h = iframe.contentDocument?.documentElement?.scrollHeight;
-        if (h && h > 0) iframe.style.height = h + "px";
-      } catch { /* sandboxed, skip */ }
+    const onMessage = (e: MessageEvent) => {
+      // Verify the message is from this iframe, not some other frame on the page
+      if (e.source !== iframeRef.current?.contentWindow) return;
+      const h = e.data?.__cpEmailH;
+      if (typeof h === "number" && h > 0) setHeight(h);
     };
-
-    const onLoad = () => {
-      fit();
-      // Re-fit once images finish loading (marketing emails have many images)
-      try {
-        const imgs = Array.from(
-          iframe.contentDocument?.querySelectorAll("img") ?? []
-        );
-        let pending = imgs.filter((i) => !i.complete).length;
-        if (!pending) return;
-        imgs.forEach((img) => {
-          if (!img.complete) {
-            img.addEventListener("load",  () => { if (--pending === 0) fit(); }, { once: true });
-            img.addEventListener("error", () => { if (--pending === 0) fit(); }, { once: true });
-          }
-        });
-      } catch { /* ok */ }
-    };
-
-    iframe.addEventListener("load", onLoad);
-    return () => iframe.removeEventListener("load", onLoad);
-  }, [html]);
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
 
   return (
     <iframe
       ref={iframeRef}
       srcDoc={buildSrcDoc(html)}
-      sandbox="allow-same-origin"
+      // allow-scripts: needed for JS-lazy-loaded images and height reporter
+      // allow-popups: needed for target="_blank" links to open new tabs
+      // allow-popups-to-escape-sandbox: opened tabs are normal (not re-sandboxed)
+      // NO allow-same-origin: scripts run in null origin, cannot touch parent DOM
+      sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
       className="w-full border-0 block"
-      style={{ height: 120 }}
+      style={{ height }}
       title="Email content"
     />
   );
