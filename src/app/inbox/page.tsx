@@ -535,7 +535,7 @@ function ReplyPanel({
     );
   }
 
-  if (!generation && !generating) {
+  if (!generation && !generating && !draftBody.trim()) {
     return (
       <Button onClick={onGenerate} icon={<Sparkles className="w-4 h-4" />}>
         Suggest a Reply
@@ -569,7 +569,7 @@ function ReplyPanel({
           className="w-full px-3.5 py-2.5 rounded-xl border border-surface-300 bg-surface-50 text-surface-900 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
           placeholder="Edit your reply…"
         />
-        {generation && (
+        {(generation || draftBody.trim()) && (
           <span className="absolute top-2 right-2 flex items-center gap-1 text-xs text-brand-500 bg-brand-50 px-1.5 py-0.5 rounded-md pointer-events-none">
             <Sparkles className="w-3 h-3" />
             AI draft

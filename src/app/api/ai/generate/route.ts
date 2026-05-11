@@ -4,10 +4,12 @@ import { createClient } from "@/lib/supabase/server";
 import type { EmailClassification, EmailMessage } from "@/lib/types";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+const MAX_RAW_EMAIL_CHARS = 12000;
 
 function toPlainText(text: string): string {
-  if (!text.trimStart().startsWith("<")) return text;
-  return text
+  const raw = (text || "").slice(0, MAX_RAW_EMAIL_CHARS);
+  if (!raw.trimStart().startsWith("<")) return raw;
+  return raw
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
     .replace(/<br\s*\/?>/gi, "\n")
@@ -112,19 +114,13 @@ export async function POST(request: Request) {
     messages: EmailMessage[];
   };
 
-  const { data: settings } = await supabase
-    .from("gym_settings")
-    .select("gym_name, gym_context")
-    .eq("user_id", user.id)
-    .single();
-
-  const gymName = settings?.gym_name || "our gym";
-  const gymContext = settings?.gym_context || "";
+  const gymName = "our gym";
+  const gymContext = "";
 
   const conversationContext = (messages || [])
-    .slice(-3)
+    .slice(-2)
     .map((m: EmailMessage) =>
-      `${m.direction === "inbound" ? "THEM" : "US"}: ${toPlainText(m.body_text || "").slice(0, 260)}`
+      `${m.direction === "inbound" ? "THEM" : "US"}: ${toPlainText(m.body_text || "").slice(0, 180)}`
     )
     .join("\n\n");
 
@@ -159,30 +155,15 @@ Return only the reply body text.`;
   const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
   const result = await model.generateContent({
     contents: [{ role: "user", parts: [{ text: prompt }] }],
-    generationConfig: { maxOutputTokens: 220, temperature: 0.4 },
+    generationConfig: { maxOutputTokens: 140, temperature: 0.4 },
   });
 
   const replyBody = stripFences(result.response.text() || "").trim();
   const replySubject = `Re: ${cleanSubject}`;
 
-  let generation = null;
-  if (replyBody) {
-    const { data } = await supabase
-      .from("ai_generations")
-      .insert({
-        user_id: user.id,
-        thread_id: threadId,
-        type: "reply",
-        generated_subject: replySubject,
-        generated_body: replyBody,
-        confidence: classification.confidence,
-        risk_level: classification.risk_level,
-        status: "pending",
-      })
-      .select()
-      .single();
-    generation = data;
-  }
+  // Fast path: return draft immediately and avoid blocking DB writes here.
+  // We still update reply status when sending in /api/gmail/send.
+  const generation = null;
 
   return NextResponse.json({
     classification,
