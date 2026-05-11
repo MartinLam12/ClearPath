@@ -3,54 +3,136 @@ import { google } from "googleapis";
 import { createClient } from "@/lib/supabase/server";
 import type { gmail_v1 } from "googleapis";
 
+// ─── MIME helpers ─────────────────────────────────────────────────────────────
+
 function decode(data: string): string {
   return Buffer.from(data, "base64url").toString("utf-8");
 }
 
-function extractBody(payload: gmail_v1.Schema$MessagePart | undefined): string {
-  if (!payload) return "";
+function headerVal(
+  headers: gmail_v1.Schema$MessagePartHeader[] | undefined,
+  name: string
+): string {
+  return headers?.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value ?? "";
+}
 
-  // Prefer plain text — returned as-is
-  if (payload.mimeType === "text/plain" && payload.body?.data) {
-    return decode(payload.body.data);
+function isAttachmentPart(part: gmail_v1.Schema$MessagePart): boolean {
+  const cd = headerVal(part.headers, "content-disposition").toLowerCase();
+  return cd.startsWith("attachment");
+}
+
+// ─── MIME tree walker (postal-mime / Roundcube approach) ──────────────────────
+//
+// Walks the full MIME tree in one pass, collecting:
+//   html  – best HTML body found
+//   plain – best plain-text body found
+//   cids  – inline image content-id → data URI
+//
+// Priority rules (per RFC 2046 §5.1.4):
+//   multipart/alternative → prefer HTML over plain; last part wins ties
+//   multipart/related     → first part is the root body; rest are inline resources
+//   multipart/mixed       → walk all parts; skip Content-Disposition: attachment
+//   any other multipart/* → walk all parts
+
+interface WalkResult {
+  html: string | null;
+  plain: string | null;
+  cids: Map<string, string>;
+}
+
+function walk(
+  part: gmail_v1.Schema$MessagePart | undefined,
+  acc: WalkResult
+): void {
+  if (!part) return;
+
+  const mime = (part.mimeType ?? "").toLowerCase();
+
+  // ── Leaf: plain text body ──
+  if (mime === "text/plain" && !isAttachmentPart(part) && part.body?.data) {
+    acc.plain = acc.plain ?? decode(part.body.data);
+    return;
   }
 
-  // Return raw HTML so the frontend can render it properly
-  if (payload.mimeType === "text/html" && payload.body?.data) {
-    return decode(payload.body.data);
+  // ── Leaf: HTML body ──
+  if (mime === "text/html" && !isAttachmentPart(part) && part.body?.data) {
+    // For multipart/alternative, the last text/html wins (override previous plain)
+    acc.html = decode(part.body.data);
+    return;
   }
 
-  if (payload.parts) {
-    const textPart = payload.parts.find((p) => p.mimeType === "text/plain");
-    if (textPart?.body?.data) return decode(textPart.body.data);
-
-    const htmlPart = payload.parts.find((p) => p.mimeType === "text/html");
-    if (htmlPart?.body?.data) return decode(htmlPart.body.data);
-
-    for (const part of payload.parts) {
-      const body = extractBody(part);
-      if (body) return body;
+  // ── Leaf: inline image (CID) ──
+  if (mime.startsWith("image/") && part.body?.data) {
+    const cid = headerVal(part.headers, "content-id")
+      .replace(/[<>]/g, "")
+      .trim();
+    if (cid) {
+      const b64 = Buffer.from(part.body.data, "base64url").toString("base64");
+      acc.cids.set(cid, `data:${mime};base64,${b64}`);
     }
+    return;
   }
 
-  return "";
+  const parts = part.parts ?? [];
+
+  // ── multipart/alternative: walk all; HTML overrides plain (last HTML wins) ──
+  if (mime === "multipart/alternative") {
+    for (const child of parts) walk(child, acc);
+    return;
+  }
+
+  // ── multipart/related: first part is root body; rest are inline resources ──
+  if (mime === "multipart/related") {
+    // Collect inline resources from all parts first
+    for (const child of parts) walk(child, acc);
+    return;
+  }
+
+  // ── multipart/mixed and everything else: walk, skip real attachments ──
+  for (const child of parts) {
+    if (!isAttachmentPart(child)) walk(child, acc);
+  }
 }
 
-function getHeader(headers: gmail_v1.Schema$MessagePartHeader[] | undefined, name: string): string {
-  return headers?.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value || "";
+// Replace cid: references with inlined data URIs
+function applyCids(html: string, cids: Map<string, string>): string {
+  if (cids.size === 0) return html;
+  let out = html;
+  for (const [cid, dataUri] of cids) {
+    const escaped = cid.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    out = out.replace(new RegExp(`cid:${escaped}`, "gi"), dataUri);
+  }
+  return out;
 }
+
+// Minimal sanitisation — strip scripts and JS handlers; keep all layout HTML/CSS.
+// The iframe sandbox already blocks script execution; this is defence-in-depth.
+function sanitize(html: string): string {
+  return html
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+    .replace(/<noscript\b[^<]*(?:(?!<\/noscript>)<[^<]*)*<\/noscript>/gi, "")
+    .replace(/\s+on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|\S+)/gi, "")
+    .replace(/(href|src|action)\s*=\s*["']javascript:[^"']*["']/gi, '$1="#"')
+    .replace(/(href|src|action)\s*=\s*["']data:[^"']*["']/gi, '$1="#"');
+}
+
+// ─── Email address parser ─────────────────────────────────────────────────────
 
 function parseEmailAddress(raw: string): { email: string; name: string | null } {
   const angleMatch = raw.match(/<([^>]+)>/);
-  const email = angleMatch?.[1] || raw.trim();
+  const email = angleMatch?.[1] ?? raw.trim();
   const nameMatch = raw.match(/^([^<]+)</);
-  const name = nameMatch?.[1]?.trim().replace(/^"|"$/g, "") || null;
+  const name = nameMatch?.[1]?.trim().replace(/^"|"$/g, "") ?? null;
   return { email, name };
 }
 
+// ─── Route ───────────────────────────────────────────────────────────────────
+
 export async function POST() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { data: settings } = await supabase
@@ -78,7 +160,7 @@ export async function POST() {
     q: "newer_than:14d",
   });
 
-  const threads = threadsResponse.data.threads || [];
+  const threads = threadsResponse.data.threads ?? [];
   let synced = 0;
 
   for (const thread of threads) {
@@ -87,29 +169,31 @@ export async function POST() {
     const threadDetail = await gmail.users.threads.get({
       userId: "me",
       id: thread.id,
-      format: "full",
+      format: "full",   // gives us the full decoded MIME tree
     });
 
-    const messages = threadDetail.data.messages || [];
+    const messages = threadDetail.data.messages ?? [];
     if (!messages.length) continue;
 
     const firstMessage = messages[0];
     const lastMessage = messages[messages.length - 1];
-    const subject = getHeader(firstMessage.payload?.headers, "subject") || "(no subject)";
-    const lastDate = new Date(parseInt(lastMessage.internalDate || "0")).toISOString();
+    const subject =
+      headerVal(firstMessage.payload?.headers, "subject") || "(no subject)";
+    const lastDate = new Date(
+      parseInt(lastMessage.internalDate ?? "0")
+    ).toISOString();
 
-    // Find the first inbound (non-gym) sender
-    const ownEmail = settings.gmail_email?.toLowerCase() || "";
+    const ownEmail = settings.gmail_email?.toLowerCase() ?? "";
     const inboundMsg = messages.find((m) => {
-      const from = getHeader(m.payload?.headers, "from").toLowerCase();
+      const from = headerVal(m.payload?.headers, "from").toLowerCase();
       return !from.includes(ownEmail);
     });
 
-    const senderRaw = getHeader(inboundMsg?.payload?.headers, "from") ||
-      getHeader(firstMessage.payload?.headers, "from");
+    const senderRaw =
+      headerVal(inboundMsg?.payload?.headers, "from") ||
+      headerVal(firstMessage.payload?.headers, "from");
     const { email: senderEmail, name: senderName } = parseEmailAddress(senderRaw);
 
-    // Skip if the sender is the gym's own email
     let contactId: string | null = null;
     if (senderEmail && !senderEmail.toLowerCase().includes(ownEmail)) {
       const { data: contact } = await supabase
@@ -120,10 +204,9 @@ export async function POST() {
         )
         .select("id")
         .single();
-      contactId = contact?.id || null;
+      contactId = contact?.id ?? null;
     }
 
-    // Upsert thread
     const { data: upsertedThread } = await supabase
       .from("email_threads")
       .upsert(
@@ -141,18 +224,27 @@ export async function POST() {
 
     if (!upsertedThread) continue;
 
-    // Upsert each message
     for (const msg of messages) {
       if (!msg.id) continue;
-      const fromRaw = getHeader(msg.payload?.headers, "from");
-      const toRaw = getHeader(msg.payload?.headers, "to");
-      const msgSubject = getHeader(msg.payload?.headers, "subject");
-      const sentAt = new Date(parseInt(msg.internalDate || "0")).toISOString();
-      const bodyRaw = extractBody(msg.payload || undefined);
-      const isHtml = bodyRaw.trimStart().startsWith("<");
-      // Store raw HTML (up to 200KB) so the inbox can render it; plain text capped at 10KB
-      const bodyText = bodyRaw.slice(0, isHtml ? 200000 : 10000);
+
+      const fromRaw = headerVal(msg.payload?.headers, "from");
+      const toRaw = headerVal(msg.payload?.headers, "to");
+      const msgSubject = headerVal(msg.payload?.headers, "subject");
+      const sentAt = new Date(parseInt(msg.internalDate ?? "0")).toISOString();
       const isOutbound = fromRaw.toLowerCase().includes(ownEmail);
+
+      // Walk MIME tree
+      const acc: WalkResult = { html: null, plain: null, cids: new Map() };
+      walk(msg.payload ?? undefined, acc);
+
+      let bodyText: string;
+      if (acc.html) {
+        // Inline CID images, sanitize, store raw HTML
+        const html = sanitize(applyCids(acc.html, acc.cids));
+        bodyText = html.slice(0, 200_000);
+      } else {
+        bodyText = (acc.plain ?? "").slice(0, 10_000);
+      }
 
       await supabase.from("email_messages").upsert(
         {

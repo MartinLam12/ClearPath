@@ -358,38 +358,85 @@ function ThreadView({
 
 // ─── HTML email iframe ────────────────────────────────────────────────────────
 
+// Injected styles go BEFORE the email's own <style> blocks so the email wins.
+// We only set hard resets: max-width on images/tables, overflow wrap, and a
+// base target so all links open in a new tab.
+const BASE_INJECT = `
+<base target="_blank">
+<meta name="color-scheme" content="light">
+<style id="__clearpath_reset">
+  img { max-width: 100% !important; height: auto; }
+  table { max-width: 100% !important; }
+  body { word-wrap: break-word; overflow-wrap: break-word; }
+</style>`;
+
+function buildSrcDoc(raw: string): string {
+  const isFullDoc = /<html\b/i.test(raw);
+
+  if (isFullDoc) {
+    // Inject after the opening <head> tag so email's own styles still override ours
+    const injected = raw.replace(/(<head[^>]*>)/i, `$1\n${BASE_INJECT}`);
+    // If there was no <head>, fall through to wrap it below
+    if (injected !== raw) return injected;
+  }
+
+  // Fragment or no <head> found — wrap in a minimal full document
+  return `<!DOCTYPE html><html><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+${BASE_INJECT}
+<style>
+  body{font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;
+       margin:0;padding:16px;color:#333}
+  a{color:#1a73e8}
+</style>
+</head><body>${raw}</body></html>`;
+}
+
 function EmailHtmlFrame({ html }: { html: string }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  const srcDoc = `<!DOCTYPE html><html><head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<base target="_blank">
-<style>
-  *{box-sizing:border-box}
-  body{font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;margin:0;padding:16px;color:#333;word-wrap:break-word;overflow-wrap:break-word}
-  img{max-width:100%;height:auto}
-  a{color:#1a73e8}
-  table{max-width:100%}
-</style>
-</head><body>${html}</body></html>`;
+  useEffect(() => {
+    const iframe = iframeRef.current;
+    if (!iframe) return;
 
-  const handleLoad = () => {
-    const doc = iframeRef.current?.contentDocument;
-    if (doc?.documentElement) {
-      iframeRef.current!.style.height = doc.documentElement.scrollHeight + "px";
-    }
-  };
+    const fit = () => {
+      try {
+        const h = iframe.contentDocument?.documentElement?.scrollHeight;
+        if (h && h > 0) iframe.style.height = h + "px";
+      } catch { /* sandboxed, skip */ }
+    };
+
+    const onLoad = () => {
+      fit();
+      // Re-fit once images finish loading (marketing emails have many images)
+      try {
+        const imgs = Array.from(
+          iframe.contentDocument?.querySelectorAll("img") ?? []
+        );
+        let pending = imgs.filter((i) => !i.complete).length;
+        if (!pending) return;
+        imgs.forEach((img) => {
+          if (!img.complete) {
+            img.addEventListener("load",  () => { if (--pending === 0) fit(); }, { once: true });
+            img.addEventListener("error", () => { if (--pending === 0) fit(); }, { once: true });
+          }
+        });
+      } catch { /* ok */ }
+    };
+
+    iframe.addEventListener("load", onLoad);
+    return () => iframe.removeEventListener("load", onLoad);
+  }, [html]);
 
   return (
     <iframe
       ref={iframeRef}
-      srcDoc={srcDoc}
+      srcDoc={buildSrcDoc(html)}
       sandbox="allow-same-origin"
       className="w-full border-0 block"
-      style={{ height: 200 }}
-      onLoad={handleLoad}
-      title="Email"
+      style={{ height: 120 }}
+      title="Email content"
     />
   );
 }
