@@ -258,16 +258,59 @@ function ThreadView({
 
   const handleGenerate = async () => {
     setGenerating(true);
+    setDraftBody("");
+
     const res = await fetch("/api/ai/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ threadId: thread.id, subject: thread.subject, messages }),
     });
-    const data = await res.json();
-    setClassification(data.classification);
-    setGeneration(data.generation);
-    setDraftBody(data.body || "");
-    setGenerating(false);
+
+    // High-risk path returns plain JSON, not a stream
+    if (!res.headers.get("content-type")?.includes("text/event-stream")) {
+      const data = await res.json();
+      setClassification(data.classification);
+      setGeneration(data.generation);
+      setDraftBody(data.body || "");
+      setGenerating(false);
+      return;
+    }
+
+    // Stream SSE chunks into the textarea progressively
+    const reader = res.body!.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const payload = line.slice(6).trim();
+          if (!payload) continue;
+
+          try {
+            const obj = JSON.parse(payload) as { type: string; classification?: EmailClassification; subject?: string; value?: string };
+            if (obj.type === "meta") {
+              if (obj.classification) setClassification(obj.classification);
+            } else if (obj.type === "text" && obj.value) {
+              setDraftBody((prev) => prev + obj.value);
+              setGenerating(false); // show textarea on first chunk
+            }
+          } catch {
+            // malformed chunk — skip
+          }
+        }
+      }
+    } finally {
+      setGenerating(false);
+    }
   };
 
   const handleSend = async () => {
@@ -543,7 +586,7 @@ function ReplyPanel({
     );
   }
 
-  if (generating) {
+  if (generating && !draftBody) {
     return (
       <div className="flex items-center gap-2 text-sm text-surface-500">
         <div className="w-4 h-4 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />

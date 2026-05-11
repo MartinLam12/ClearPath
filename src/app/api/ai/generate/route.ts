@@ -4,10 +4,36 @@ import { createClient } from "@/lib/supabase/server";
 import type { EmailClassification, EmailMessage } from "@/lib/types";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-const MAX_RAW_EMAIL_CHARS = 12000;
+
+// ─── Classification ───────────────────────────────────────────────────────────
+
+function quickClassify(subject: string, context: string): EmailClassification {
+  const h = `${subject}\n${context}`.toLowerCase();
+  if (/(cancel|cancellation|refund|chargeback|stop membership|terminate|quit)/.test(h))
+    return { type: "cancellation", risk_level: "high", confidence: 0.92, contact_type_guess: "member", summary: "Potential cancellation request requiring manual handling." };
+  if (/(angry|upset|terrible|awful|bad service|frustrat|disappointed|unhappy)/.test(h))
+    return { type: "complaint", risk_level: "high", confidence: 0.9, contact_type_guess: "member", summary: "Potential complaint requiring a careful manual response." };
+  if (/(bill|billing|charged|charge|payment|invoice|price wrong|overcharged)/.test(h))
+    return { type: "billing", risk_level: "high", confidence: 0.9, contact_type_guess: "member", summary: "Potential billing issue requiring manual review." };
+  if (/(class|schedule|time|coach|instructor|session|availability)/.test(h))
+    return { type: "class_inquiry", risk_level: "low", confidence: 0.84, contact_type_guess: "unknown", summary: "Class details or scheduling question." };
+  if (/(trial|free trial|join|membership|price|pricing|plans|sign up|drop in)/.test(h))
+    return { type: "lead_inquiry", risk_level: "low", confidence: 0.86, contact_type_guess: "lead", summary: "Lead or trial inquiry." };
+  return { type: "general", risk_level: "low", confidence: 0.75, contact_type_guess: "unknown", summary: "General inbound message." };
+}
+
+// ─── Tone guide per classification (template selector) ────────────────────────
+
+const TONE: Record<string, string> = {
+  class_inquiry: "helpful — answer the schedule/class question directly",
+  lead_inquiry: "warm and inviting — make them excited to come in for a trial",
+  general: "friendly and professional, like a helpful coach",
+};
+
+// ─── Context builder ──────────────────────────────────────────────────────────
 
 function toPlainText(text: string): string {
-  const raw = (text || "").slice(0, MAX_RAW_EMAIL_CHARS);
+  const raw = (text || "").slice(0, 800);
   if (!raw.trimStart().startsWith("<")) return raw;
   return raw
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
@@ -22,153 +48,85 @@ function toPlainText(text: string): string {
     .trim();
 }
 
-function quickClassify(subject: string, context: string): EmailClassification {
-  const haystack = `${subject}\n${context}`.toLowerCase();
-
-  const cancellation = /(cancel|cancellation|refund|chargeback|stop membership|terminate|quit)/.test(
-    haystack
-  );
-  const complaint = /(angry|upset|terrible|awful|bad service|frustrat|disappointed|unhappy)/.test(
-    haystack
-  );
-  const billing = /(bill|billing|charged|charge|payment|invoice|price wrong|overcharged)/.test(
-    haystack
-  );
-
-  if (cancellation) {
-    return {
-      type: "cancellation",
-      risk_level: "high",
-      confidence: 0.92,
-      contact_type_guess: "member",
-      summary: "Potential cancellation request requiring manual handling.",
-    };
-  }
-
-  if (complaint) {
-    return {
-      type: "complaint",
-      risk_level: "high",
-      confidence: 0.9,
-      contact_type_guess: "member",
-      summary: "Potential complaint requiring a careful manual response.",
-    };
-  }
-
-  if (billing) {
-    return {
-      type: "billing",
-      risk_level: "high",
-      confidence: 0.9,
-      contact_type_guess: "member",
-      summary: "Potential billing issue requiring manual review.",
-    };
-  }
-
-  const classInquiry = /(class|schedule|time|coach|instructor|session|availability)/.test(haystack);
-  const leadInquiry = /(trial|free trial|join|membership|price|pricing|plans|sign up|drop in)/.test(
-    haystack
-  );
-
-  if (classInquiry) {
-    return {
-      type: "class_inquiry",
-      risk_level: "low",
-      confidence: 0.84,
-      contact_type_guess: "unknown",
-      summary: "Class details or scheduling question.",
-    };
-  }
-
-  if (leadInquiry) {
-    return {
-      type: "lead_inquiry",
-      risk_level: "low",
-      confidence: 0.86,
-      contact_type_guess: "lead",
-      summary: "Lead or trial inquiry.",
-    };
-  }
-
-  return {
-    type: "general",
-    risk_level: "low",
-    confidence: 0.75,
-    contact_type_guess: "unknown",
-    summary: "General inbound message.",
-  };
-}
-
-function stripFences(text: string): string {
-  return text.replace(/^```[a-zA-Z]*\n?/g, "").replace(/```$/g, "").trim();
-}
+// ─── Route ────────────────────────────────────────────────────────────────────
 
 export async function POST(request: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { threadId, subject, messages } = await request.json() as {
+  const { subject, messages } = await request.json() as {
     threadId: string;
     subject: string;
     messages: EmailMessage[];
   };
 
-  const gymName = "our gym";
-  const gymContext = "";
+  // Fetch gym settings and build context in parallel
+  const [{ data: settings }] = await Promise.all([
+    supabase.from("gym_settings").select("gym_name, gym_context").eq("user_id", user.id).single(),
+  ]);
 
-  const conversationContext = (messages || [])
-    .slice(-2)
-    .map((m: EmailMessage) =>
-      `${m.direction === "inbound" ? "THEM" : "US"}: ${toPlainText(m.body_text || "").slice(0, 180)}`
-    )
-    .join("\n\n");
-
+  const gymName = settings?.gym_name || "our gym";
+  const gymContext = settings?.gym_context || "";
   const cleanSubject = (subject || "").replace(/^Re:\s*/i, "");
 
-  const classification = quickClassify(subject || "", conversationContext);
+  const conversationSnippet = (messages || [])
+    .slice(-2)
+    .map((m) => `${m.direction === "inbound" ? "THEM" : "US"}: ${toPlainText(m.body_text || "").slice(0, 180)}`)
+    .join("\n\n");
 
-  if (classification.risk_level === "high") {
-    return NextResponse.json({
-      classification,
-      generation: null,
-      subject: `Re: ${cleanSubject}`,
-      body: "",
-    });
-  }
-
-  const prompt = `Write a short reply for ${gymName}, a boxing/martial arts gym.
-${gymContext ? `Gym context: ${gymContext}` : ""}
-
-Subject: ${subject || "(no subject)"}
-Conversation:
-${conversationContext}
-
-Rules:
-- Under 85 words
-- Friendly and warm, like a coach
-- Include one clear next step/question
-- No markdown, no JSON, no greeting repetition
-
-Return only the reply body text.`;
-
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-  const result = await model.generateContent({
-    contents: [{ role: "user", parts: [{ text: prompt }] }],
-    generationConfig: { maxOutputTokens: 140, temperature: 0.4 },
-  });
-
-  const replyBody = stripFences(result.response.text() || "").trim();
+  const classification = quickClassify(subject || "", conversationSnippet);
   const replySubject = `Re: ${cleanSubject}`;
 
-  // Fast path: return draft immediately and avoid blocking DB writes here.
-  // We still update reply status when sending in /api/gmail/send.
-  const generation = null;
+  // High-risk: return immediately, no LLM call
+  if (classification.risk_level === "high") {
+    return NextResponse.json({ classification, generation: null, subject: replySubject, body: "" });
+  }
 
-  return NextResponse.json({
-    classification,
-    generation,
-    subject: replySubject,
-    body: replyBody,
+  const tone = TONE[classification.type] ?? TONE.general;
+
+  const prompt = `Write a short email reply for ${gymName}.${gymContext ? ` Context: ${gymContext}` : ""}
+Tone: ${tone}
+Subject: ${cleanSubject}
+${conversationSnippet}
+
+Under 85 words. Friendly, like a coach. End with one clear next step. Write only the reply body — no subject line.`;
+
+  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-lite" });
+
+  const result = await model.generateContentStream({
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
+    generationConfig: { maxOutputTokens: 130, temperature: 0.3 },
+  });
+
+  // Stream SSE: first event = metadata, subsequent = text chunks
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (obj: object) =>
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
+
+      send({ type: "meta", classification, subject: replySubject });
+
+      try {
+        for await (const chunk of result.stream) {
+          const text = chunk.text();
+          if (text) send({ type: "text", value: text });
+        }
+      } catch {
+        send({ type: "error" });
+      }
+
+      send({ type: "done" });
+      controller.close();
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "X-Accel-Buffering": "no",
+    },
   });
 }
