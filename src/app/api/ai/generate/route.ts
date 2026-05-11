@@ -92,15 +92,11 @@ ${conversationSnippet}
 
 Under 85 words. Friendly, like a coach. End with one clear next step. Write only the reply body — no subject line.`;
 
-  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-lite" });
-
-  const result = await model.generateContentStream({
-    contents: [{ role: "user", parts: [{ text: prompt }] }],
-    generationConfig: { maxOutputTokens: 130, temperature: 0.3 },
-  });
-
-  // Stream SSE: first event = metadata, subsequent = text chunks
   const encoder = new TextEncoder();
+
+  // Return the Response immediately so the client gets headers right away.
+  // The LLM call happens inside start() — never before — so fetch() resolves
+  // as soon as we return the Response, not after Gemini responds.
   const stream = new ReadableStream({
     async start(controller) {
       const send = (obj: object) =>
@@ -109,12 +105,30 @@ Under 85 words. Friendly, like a coach. End with one clear next step. Write only
       send({ type: "meta", classification, subject: replySubject });
 
       try {
+        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-lite" });
+        const result = await model.generateContentStream({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: { maxOutputTokens: 130, temperature: 0.3 },
+        });
         for await (const chunk of result.stream) {
           const text = chunk.text();
           if (text) send({ type: "text", value: text });
         }
       } catch {
-        send({ type: "error" });
+        // Fall back to gemini-1.5-flash if 2.0-flash-lite is unavailable
+        try {
+          const fallback = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+          const result = await fallback.generateContentStream({
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
+            generationConfig: { maxOutputTokens: 130, temperature: 0.3 },
+          });
+          for await (const chunk of result.stream) {
+            const text = chunk.text();
+            if (text) send({ type: "text", value: text });
+          }
+        } catch {
+          send({ type: "error" });
+        }
       }
 
       send({ type: "done" });
