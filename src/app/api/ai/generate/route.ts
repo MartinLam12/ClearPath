@@ -44,9 +44,14 @@ function stripFences(text: string): string {
 }
 
 export async function POST(request: Request) {
+  console.log("[generate] route hit");
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) {
+    console.log("[generate] unauthorized");
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  console.log("[generate] user:", user.id);
 
   const { subject, messages } = await request.json() as {
     threadId: string;
@@ -66,6 +71,7 @@ export async function POST(request: Request) {
 
   const cleanSubject = (subject || "").replace(/^Re:\s*/i, "");
   const classification = quickClassify(subject || "", conversationContext);
+  console.log("[generate] classification:", classification.type, classification.risk_level);
 
   if (classification.risk_level === "high") {
     return NextResponse.json({ classification, generation: null, subject: `Re: ${cleanSubject}`, body: "" });
@@ -86,8 +92,9 @@ Rules:
 
 Return only the reply body text.`;
 
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-lite" });
 
+  console.log("[generate] calling Gemini...");
   try {
     const result = await model.generateContent({
       contents: [{ role: "user", parts: [{ text: prompt }] }],
@@ -95,6 +102,7 @@ Return only the reply body text.`;
     });
 
     const replyBody = stripFences(result.response.text() || "").trim();
+    console.log("[generate] reply length:", replyBody.length, "chars");
     return NextResponse.json({ classification, generation: null, subject: `Re: ${cleanSubject}`, body: replyBody });
   } catch (err) {
     console.error("[generate] LLM error:", err);
