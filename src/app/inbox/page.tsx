@@ -84,7 +84,7 @@ function statusBadge(status: EmailThread["status"]) {
 const RISK_BANNER: Record<string, { bg: string; text: string }> = {
   high: {
     bg: "bg-danger-50 border-danger-200 text-danger-800",
-    text: "This email may involve a complaint, billing issue, or cancellation. Please reply manually.",
+    text: "This email involves a complaint, billing issue, or cancellation. The AI draft is a starting point only — do not make promises or commitments. Review carefully before sending.",
   },
   medium: {
     bg: "bg-yellow-50 border-yellow-200 text-yellow-800",
@@ -577,23 +577,27 @@ function ReplyPanel({
   onSend: () => void;
   onReject: () => void;
 }) {
+  const [verified, setVerified] = useState(false);
   const riskInfo = classification ? RISK_BANNER[classification.risk_level] : null;
+  const isHighRisk = classification?.risk_level === "high";
 
-  if (classification?.risk_level === "high") {
-    return (
-      <div className={cn("flex gap-3 p-4 rounded-xl border text-sm", riskInfo?.bg)}>
-        <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
-        <div>
-          <p className="font-semibold mb-1">Manual reply needed</p>
-          <p className="text-xs opacity-80">{riskInfo?.text}</p>
-        </div>
-      </div>
-    );
-  }
+  // Uncheck verification whenever a new generation arrives
+  useEffect(() => {
+    setVerified(false);
+  }, [generation]);
 
   if (!generation && !generating && !draftBody.trim()) {
     return (
       <div className="flex flex-col gap-2">
+        {isHighRisk && riskInfo && (
+          <div className={cn("flex gap-3 p-3 rounded-xl border text-sm", riskInfo.bg)}>
+            <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold mb-0.5">Sensitive email</p>
+              <p className="text-xs opacity-80">{riskInfo.text}</p>
+            </div>
+          </div>
+        )}
         {generateError && (
           <p className="text-xs text-danger-600">Failed to generate a draft. Try again.</p>
         )}
@@ -615,7 +619,16 @@ function ReplyPanel({
 
   return (
     <div className="space-y-3">
-      {riskInfo && classification?.risk_level === "medium" && (
+      {isHighRisk && riskInfo && (
+        <div className={cn("flex gap-3 p-3 rounded-xl border text-sm", riskInfo.bg)}>
+          <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold mb-0.5">Sensitive email — review carefully</p>
+            <p className="text-xs opacity-80">{riskInfo.text}</p>
+          </div>
+        </div>
+      )}
+      {!isHighRisk && riskInfo && (
         <div className={cn("flex gap-2 px-3 py-2 rounded-xl border text-xs", riskInfo.bg)}>
           <span>⚠️</span>
           <span>{riskInfo.text}</span>
@@ -638,11 +651,25 @@ function ReplyPanel({
         )}
       </div>
 
+      {isHighRisk && (
+        <label className="flex items-start gap-2.5 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={verified}
+            onChange={(e) => setVerified(e.target.checked)}
+            className="mt-0.5 w-4 h-4 accent-brand-600 shrink-0"
+          />
+          <span className="text-xs text-surface-600 leading-snug">
+            I have reviewed this draft and confirm it is appropriate to send.
+          </span>
+        </label>
+      )}
+
       <div className="flex items-center gap-2">
         <Button
           onClick={onSend}
           loading={sending}
-          disabled={!draftBody.trim()}
+          disabled={!draftBody.trim() || (isHighRisk && !verified)}
           icon={<Send className="w-4 h-4" />}
         >
           Send Reply

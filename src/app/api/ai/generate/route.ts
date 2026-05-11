@@ -73,11 +73,25 @@ export async function POST(request: Request) {
   const classification = quickClassify(subject || "", conversationContext);
   console.log("[generate] classification:", classification.type, classification.risk_level);
 
-  if (classification.risk_level === "high") {
-    return NextResponse.json({ classification, generation: null, subject: `Re: ${cleanSubject}`, body: "" });
-  }
+  const isSensitive = classification.risk_level === "high";
 
-  const prompt = `Write a short reply for ${gymName}, a boxing/martial arts gym.
+  const prompt = isSensitive
+    ? `Write a careful, empathetic reply for ${gymName}, a boxing/martial arts gym. This email is about: ${classification.summary}
+${gymContext ? `Gym context: ${gymContext}` : ""}
+
+Subject: ${subject || "(no subject)"}
+Conversation:
+${conversationContext}
+
+Rules:
+- Under 100 words
+- Empathetic and professional — acknowledge their concern without dismissing it
+- Do NOT promise refunds, free sessions, cancellations, or dispute resolutions
+- Invite them to call or speak directly with a manager for a proper resolution
+- No markdown, no JSON
+
+Return only the reply body text.`
+    : `Write a short reply for ${gymName}, a boxing/martial arts gym.
 ${gymContext ? `Gym context: ${gymContext}` : ""}
 
 Subject: ${subject || "(no subject)"}
