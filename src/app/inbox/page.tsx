@@ -429,7 +429,8 @@ ${inject}
 
 function EmailHtmlFrame({ html }: { html: string }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const [height, setHeight] = useState(120);
+  const MIN_EMAIL_FRAME_HEIGHT = 280;
+  const [height, setHeight] = useState(MIN_EMAIL_FRAME_HEIGHT);
 
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
@@ -452,7 +453,7 @@ function EmailHtmlFrame({ html }: { html: string }) {
       // NO allow-same-origin: scripts run in null origin, cannot touch parent DOM
       sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
       className="w-full border-0 block"
-      style={{ height }}
+      style={{ height: Math.max(height, MIN_EMAIL_FRAME_HEIGHT) }}
       title="Email content"
     />
   );
