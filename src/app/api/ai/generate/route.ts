@@ -59,8 +59,14 @@ export async function POST(request: Request) {
     messages: EmailMessage[];
   };
 
-  const gymName = "our gym";
-  const gymContext = "";
+  const { data: gymSettings } = await supabase
+    .from("gym_settings")
+    .select("gym_name, gym_context")
+    .eq("user_id", user.id)
+    .single();
+
+  const gymName = gymSettings?.gym_name?.trim() || "our gym";
+  const gymContext = gymSettings?.gym_context?.trim() || "";
 
   const conversationContext = (messages || [])
     .slice(-2)
@@ -76,8 +82,9 @@ export async function POST(request: Request) {
   const isSensitive = classification.risk_level === "high";
 
   const prompt = isSensitive
-    ? `Write a careful, empathetic reply for ${gymName}, a boxing/martial arts gym. This email is about: ${classification.summary}
-${gymContext ? `Gym context: ${gymContext}` : ""}
+    ? `You are replying on behalf of ${gymName}, a boxing/martial arts gym.
+${gymContext ? `\nGYM POLICIES — you MUST apply these exactly:\n${gymContext}\n` : ""}
+This email is about: ${classification.summary}
 
 Subject: ${subject || "(no subject)"}
 Conversation:
@@ -85,15 +92,14 @@ ${conversationContext}
 
 Rules:
 - Under 100 words
-- Empathetic and professional — acknowledge their concern without dismissing it
-- Do NOT promise refunds, free sessions, cancellations, or dispute resolutions
-- Invite them to call or speak directly with a manager for a proper resolution
+- Empathetic and professional — acknowledge their concern clearly
+- Apply the gym policies above directly; if a policy covers their request, state it plainly and kindly
+- Do not make commitments or promises beyond what the policies allow
 - No markdown, no JSON
 
 Return only the reply body text.`
     : `Write a short reply for ${gymName}, a boxing/martial arts gym.
-${gymContext ? `Gym context: ${gymContext}` : ""}
-
+${gymContext ? `\nGym context:\n${gymContext}\n` : ""}
 Subject: ${subject || "(no subject)"}
 Conversation:
 ${conversationContext}
@@ -112,7 +118,7 @@ Return only the reply body text.`;
   try {
     const result = await model.generateContent({
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: { maxOutputTokens: 140, temperature: 0.4 },
+      generationConfig: { maxOutputTokens: isSensitive ? 200 : 140, temperature: 0.4 },
     });
 
     const replyBody = stripFences(result.response.text() || "").trim();
