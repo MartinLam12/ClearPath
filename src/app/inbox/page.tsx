@@ -21,21 +21,42 @@ import {
 
 function cleanBody(text: string | null): string {
   if (!text) return "";
-  if (!text.trimStart().startsWith("<")) return text;
-  return text
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/p>/gi, "\n\n")
-    .replace(/<\/div>/gi, "\n")
-    .replace(/<[^>]+>/g, "")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
+
+  let clean = text;
+  // Strip HTML if present
+  if (text.trimStart().startsWith("<")) {
+    clean = text
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/p>/gi, "\n\n")
+      .replace(/<\/div>/gi, "\n")
+      .replace(/<[^>]+>/g, "")
+      .replace(/&nbsp;/g, " ")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .trim();
+  }
+
+  // Strip URL noise common in plain-text marketing emails
+  clean = clean
+    .replace(/\(\s*https?:\/\/[^\s)]{20,}\s*\)/g, "") // remove (https://...) patterns
+    .split("\n")
+    .filter((line) => {
+      const t = line.trim();
+      if (!t) return true;
+      if (/^https?:\/\/\S+$/.test(t)) return false; // bare URL-only line
+      if (t.length > 120 && /^https?:\/\//.test(t)) return false; // long tracking URL
+      return true;
+    })
+    .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+
+  return clean;
 }
 
 function timeAgo(dateStr: string | null): string {
@@ -152,7 +173,7 @@ export default function InboxPage() {
         ) : threads.length === 0 ? (
           <EmptyInbox onSync={handleSync} syncing={syncing} />
         ) : (
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 min-h-0 overflow-y-auto">
             {threads.map((thread) => (
               <button
                 key={thread.id}
@@ -222,7 +243,6 @@ function ThreadView({
   onUpdate: () => Promise<void>;
   onBack: () => void;
 }) {
-  const [classifying, setClassifying] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [classification, setClassification] = useState<EmailClassification | null>(null);
   const [draftBody, setDraftBody] = useState(thread.latest_generation?.generated_body || "");
@@ -237,31 +257,14 @@ function ThreadView({
   const replyTo = thread.contact?.email || lastInbound?.from_email || "";
 
   const handleGenerate = async () => {
-    setClassifying(true);
-    const lastMsg = messages[messages.length - 1];
-    const classifyRes = await fetch("/api/ai/classify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ subject: thread.subject, body: lastMsg?.body_text }),
-    });
-    const cls: EmailClassification = await classifyRes.json();
-    setClassification(cls);
-    setClassifying(false);
-
-    if (cls.risk_level === "high") return;
-
     setGenerating(true);
-    const replyRes = await fetch("/api/ai/reply", {
+    const res = await fetch("/api/ai/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        threadId: thread.id,
-        subject: thread.subject,
-        messages,
-        classification: cls,
-      }),
+      body: JSON.stringify({ threadId: thread.id, subject: thread.subject, messages }),
     });
-    const data = await replyRes.json();
+    const data = await res.json();
+    setClassification(data.classification);
     setGeneration(data.generation);
     setDraftBody(data.body || "");
     setGenerating(false);
@@ -322,7 +325,7 @@ function ThreadView({
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
         {messages.map((msg) => (
           <MessageBubble key={msg.id} message={msg} />
         ))}
@@ -338,7 +341,6 @@ function ThreadView({
         ) : (
           <ReplyPanel
             classification={classification}
-            classifying={classifying}
             generating={generating}
             generation={generation}
             draftBody={draftBody}
@@ -369,7 +371,7 @@ function MessageBubble({ message }: { message: EmailMessage }) {
         <p className={cn("text-xs mb-1 font-medium", isOutbound ? "text-brand-200" : "text-surface-400")}>
           {isOutbound ? "You" : message.from_email}
         </p>
-        <p className="whitespace-pre-wrap leading-relaxed">{cleanBody(message.body_text)}</p>
+        <p className="whitespace-pre-wrap leading-relaxed break-words">{cleanBody(message.body_text)}</p>
       </div>
     </div>
   );
@@ -379,7 +381,6 @@ function MessageBubble({ message }: { message: EmailMessage }) {
 
 function ReplyPanel({
   classification,
-  classifying,
   generating,
   generation,
   draftBody,
@@ -390,7 +391,6 @@ function ReplyPanel({
   onReject,
 }: {
   classification: EmailClassification | null;
-  classifying: boolean;
   generating: boolean;
   generation: AIGeneration | null;
   draftBody: string;
@@ -401,15 +401,6 @@ function ReplyPanel({
   onReject: () => void;
 }) {
   const riskInfo = classification ? RISK_BANNER[classification.risk_level] : null;
-
-  if (classifying) {
-    return (
-      <div className="flex items-center gap-2 text-sm text-surface-500">
-        <div className="w-4 h-4 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
-        Analysing email…
-      </div>
-    );
-  }
 
   if (classification?.risk_level === "high") {
     return (
