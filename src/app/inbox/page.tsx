@@ -429,7 +429,7 @@ ${inject}
 
 function EmailHtmlFrame({ html }: { html: string }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const MIN_EMAIL_FRAME_HEIGHT = 280;
+  const MIN_EMAIL_FRAME_HEIGHT = 500;
   const [height, setHeight] = useState(MIN_EMAIL_FRAME_HEIGHT);
 
   useEffect(() => {
