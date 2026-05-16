@@ -65,7 +65,7 @@ create index if not exists email_threads_last_message on email_threads (user_id,
 -- Individual email messages
 create table if not exists email_messages (
   id                uuid primary key default gen_random_uuid(),
-  thread_id         uuid references email_threads not null on delete cascade,
+  thread_id         uuid not null references email_threads on delete cascade,
   gmail_message_id  text not null unique,
   direction         text check (direction in ('inbound','outbound')) not null,
   from_email        text,

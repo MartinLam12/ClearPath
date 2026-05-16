@@ -11,7 +11,6 @@ import {
   X,
   LayoutDashboard,
   Mail,
-  CalendarCheck,
   Settings,
   LogOut,
   Users,
@@ -21,7 +20,6 @@ const navLinks = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/inbox", label: "Inbox", icon: Mail },
   { href: "/contacts", label: "Contacts", icon: Users },
-  { href: "/classes", label: "Class Follow-Ups", icon: CalendarCheck },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

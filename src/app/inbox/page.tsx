@@ -5,13 +5,12 @@ import { Button, Badge } from "@/components/ui";
 import { listThreads, getThreadDetail, archiveThread } from "@/app/actions/threads";
 import { approveGeneration, rejectGeneration } from "@/app/actions/ai-generations";
 import { cn } from "@/lib/utils";
-import type { EmailThread, EmailMessage, AIGeneration, EmailClassification } from "@/lib/types";
+import type { EmailThread, EmailMessage, AIGeneration } from "@/lib/types";
 import {
   Mail,
   RefreshCw,
   Archive,
   Send,
-  AlertTriangle,
   ChevronLeft,
   Sparkles,
   X,
@@ -23,7 +22,6 @@ function cleanBody(text: string | null): string {
   if (!text) return "";
 
   let clean = text;
-  // Strip HTML if present
   if (text.trimStart().startsWith("<")) {
     clean = text
       .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
@@ -41,15 +39,14 @@ function cleanBody(text: string | null): string {
       .trim();
   }
 
-  // Strip URL noise common in plain-text marketing emails
   clean = clean
-    .replace(/\(\s*https?:\/\/[^\s)]{20,}\s*\)/g, "") // remove (https://...) patterns
+    .replace(/\(\s*https?:\/\/[^\s)]{20,}\s*\)/g, "")
     .split("\n")
     .filter((line) => {
       const t = line.trim();
       if (!t) return true;
-      if (/^https?:\/\/\S+$/.test(t)) return false; // bare URL-only line
-      if (t.length > 120 && /^https?:\/\//.test(t)) return false; // long tracking URL
+      if (/^https?:\/\/\S+$/.test(t)) return false;
+      if (t.length > 120 && /^https?:\/\//.test(t)) return false;
       return true;
     })
     .join("\n")
@@ -80,17 +77,6 @@ function statusBadge(status: EmailThread["status"]) {
   if (status === "unread") return <Badge variant="brand">New</Badge>;
   return null;
 }
-
-const RISK_BANNER: Record<string, { bg: string; text: string }> = {
-  high: {
-    bg: "bg-danger-50 border-danger-200 text-danger-800",
-    text: "This email involves a complaint, billing issue, or cancellation. The AI draft is a starting point only — do not make promises or commitments. Review carefully before sending.",
-  },
-  medium: {
-    bg: "bg-yellow-50 border-yellow-200 text-yellow-800",
-    text: "Review this draft carefully before sending.",
-  },
-};
 
 // ─── Main page ───────────────────────────────────────────────────────────────
 
@@ -245,7 +231,6 @@ function ThreadView({
 }) {
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState(false);
-  const [classification, setClassification] = useState<EmailClassification | null>(null);
   const [draftBody, setDraftBody] = useState(thread.latest_generation?.generated_body || "");
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(thread.latest_generation?.status === "sent");
@@ -268,10 +253,8 @@ function ThreadView({
       body: JSON.stringify({ threadId: thread.id, subject: thread.subject, messages }),
     });
 
-    // Route always returns JSON now
     if (!res.headers.get("content-type")?.includes("text/event-stream")) {
       const data = await res.json();
-      setClassification(data.classification);
       setGeneration(data.generation);
       setDraftBody(data.body || "");
       if (data.error || !data.body) setGenerateError(true);
@@ -279,7 +262,6 @@ function ThreadView({
       return;
     }
 
-    // Stream SSE chunks into the textarea progressively
     const reader = res.body!.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
@@ -300,10 +282,8 @@ function ThreadView({
           if (!payload) continue;
 
           try {
-            const obj = JSON.parse(payload) as { type: string; classification?: EmailClassification; value?: string };
-            if (obj.type === "meta") {
-              if (obj.classification) setClassification(obj.classification);
-            } else if (obj.type === "text" && obj.value) {
+            const obj = JSON.parse(payload) as { type: string; value?: string };
+            if (obj.type === "text" && obj.value) {
               setDraftBody((prev) => prev + obj.value);
               setGenerating(false);
               gotText = true;
@@ -352,7 +332,6 @@ function ThreadView({
     if (generation) await rejectGeneration(generation.id);
     setGeneration(null);
     setDraftBody("");
-    setClassification(null);
   };
 
   return (
@@ -385,15 +364,17 @@ function ThreadView({
       </div>
 
       {/* Reply panel */}
-      <div className="bg-white border-t border-surface-100 p-4">
+      <div className="bg-white border-t border-surface-100 p-4 space-y-2">
         {sent ? (
-          <div className="flex items-center gap-2 text-sm text-success-700 bg-success-50 border border-success-200 rounded-xl px-4 py-3">
-            <span>✓</span>
-            <span>Reply sent</span>
-          </div>
+          <>
+            <div className="flex items-center gap-2 text-sm text-success-700 bg-success-50 border border-success-200 rounded-xl px-4 py-3">
+              <span>✓</span>
+              <span>Reply sent</span>
+            </div>
+            {generation && <StyleFeedback generationId={generation.id} />}
+          </>
         ) : (
           <ReplyPanel
-            classification={classification}
             generating={generating}
             generateError={generateError}
             generation={generation}
@@ -412,8 +393,6 @@ function ThreadView({
 
 // ─── HTML email iframe ────────────────────────────────────────────────────────
 
-// Upgrade http:// image/background sources to https:// to avoid mixed-content
-// blocking on our HTTPS deployment. Most CDNs support HTTPS at the same URL.
 function upgradeHttpUrls(html: string): string {
   return html
     .replace(/(<img[^>]+\bsrc\s*=\s*["'])http:\/\//gi, "$1https://")
@@ -421,8 +400,6 @@ function upgradeHttpUrls(html: string): string {
     .replace(/url\(\s*["']?http:\/\//gi, "url(https://");
 }
 
-// Styles injected BEFORE email's own <style> so the email's styles still win.
-// Hard limits only: image/table widths and word wrap.
 const BASE_STYLES = `
 <base target="_blank">
 <meta name="color-scheme" content="light">
@@ -432,8 +409,6 @@ const BASE_STYLES = `
   body{word-wrap:break-word;overflow-wrap:break-word}
 </style>`;
 
-// Runs inside the null-origin sandbox — reports height to parent via postMessage.
-// Uses allow-scripts (no allow-same-origin) so it cannot touch parent DOM.
 const HEIGHT_SCRIPT = `<script>
 (function(){
   function h(){
@@ -468,7 +443,6 @@ function buildSrcDoc(raw: string): string {
     if (result !== upgraded) return result;
   }
 
-  // Fragment — wrap in a minimal document
   return `<!DOCTYPE html><html><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -488,7 +462,6 @@ function EmailHtmlFrame({ html }: { html: string }) {
 
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
-      // Verify the message is from this iframe, not some other frame on the page
       if (e.source !== iframeRef.current?.contentWindow) return;
       const h = e.data?.__cpEmailH;
       if (typeof h === "number" && h > 0) setHeight(h);
@@ -501,10 +474,6 @@ function EmailHtmlFrame({ html }: { html: string }) {
     <iframe
       ref={iframeRef}
       srcDoc={buildSrcDoc(html)}
-      // allow-scripts: needed for JS-lazy-loaded images and height reporter
-      // allow-popups: needed for target="_blank" links to open new tabs
-      // allow-popups-to-escape-sandbox: opened tabs are normal (not re-sandboxed)
-      // NO allow-same-origin: scripts run in null origin, cannot touch parent DOM
       sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
       className="w-full border-0 block"
       style={{ height: Math.max(height, MIN_EMAIL_FRAME_HEIGHT) }}
@@ -555,7 +524,6 @@ function MessageBubble({ message }: { message: EmailMessage }) {
 // ─── Reply panel ─────────────────────────────────────────────────────────────
 
 function ReplyPanel({
-  classification,
   generating,
   generateError,
   generation,
@@ -566,7 +534,6 @@ function ReplyPanel({
   onSend,
   onReject,
 }: {
-  classification: EmailClassification | null;
   generating: boolean;
   generateError: boolean;
   generation: AIGeneration | null;
@@ -577,27 +544,9 @@ function ReplyPanel({
   onSend: () => void;
   onReject: () => void;
 }) {
-  const [verified, setVerified] = useState(false);
-  const riskInfo = classification ? RISK_BANNER[classification.risk_level] : null;
-  const isHighRisk = classification?.risk_level === "high";
-
-  // Uncheck verification whenever a new generation arrives
-  useEffect(() => {
-    setVerified(false);
-  }, [generation]);
-
   if (!generation && !generating && !draftBody.trim()) {
     return (
       <div className="flex flex-col gap-2">
-        {isHighRisk && riskInfo && (
-          <div className={cn("flex gap-3 p-3 rounded-xl border text-sm", riskInfo.bg)}>
-            <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-semibold mb-0.5">Sensitive email</p>
-              <p className="text-xs opacity-80">{riskInfo.text}</p>
-            </div>
-          </div>
-        )}
         {generateError && (
           <p className="text-xs text-danger-600">Failed to generate a draft. Try again.</p>
         )}
@@ -619,22 +568,6 @@ function ReplyPanel({
 
   return (
     <div className="space-y-3">
-      {isHighRisk && riskInfo && (
-        <div className={cn("flex gap-3 p-3 rounded-xl border text-sm", riskInfo.bg)}>
-          <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
-          <div>
-            <p className="font-semibold mb-0.5">Sensitive email — review carefully</p>
-            <p className="text-xs opacity-80">{riskInfo.text}</p>
-          </div>
-        </div>
-      )}
-      {!isHighRisk && riskInfo && (
-        <div className={cn("flex gap-2 px-3 py-2 rounded-xl border text-xs", riskInfo.bg)}>
-          <span>⚠️</span>
-          <span>{riskInfo.text}</span>
-        </div>
-      )}
-
       <div className="relative">
         <textarea
           value={draftBody}
@@ -651,25 +584,11 @@ function ReplyPanel({
         )}
       </div>
 
-      {isHighRisk && (
-        <label className="flex items-start gap-2.5 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={verified}
-            onChange={(e) => setVerified(e.target.checked)}
-            className="mt-0.5 w-4 h-4 accent-brand-600 shrink-0"
-          />
-          <span className="text-xs text-surface-600 leading-snug">
-            I have reviewed this draft and confirm it is appropriate to send.
-          </span>
-        </label>
-      )}
-
       <div className="flex items-center gap-2">
         <Button
           onClick={onSend}
           loading={sending}
-          disabled={!draftBody.trim() || (isHighRisk && !verified)}
+          disabled={!draftBody.trim()}
           icon={<Send className="w-4 h-4" />}
         >
           Send Reply
@@ -678,6 +597,46 @@ function ReplyPanel({
           Clear
         </Button>
       </div>
+    </div>
+  );
+}
+
+// ─── Style feedback ───────────────────────────────────────────────────────────
+// Shown under the "Reply sent" confirmation. Two taps max.
+
+type StyleRating = "good" | "wrong_style";
+
+function StyleFeedback({ generationId }: { generationId: string }) {
+  const [done, setDone] = useState(false);
+
+  const submit = async (rating: StyleRating) => {
+    setDone(true); // optimistic — don't block on network
+    await fetch("/api/style/feedback", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ generationId, rating }),
+    }).catch(() => {/* silent */});
+  };
+
+  if (done) {
+    return <p className="text-xs text-surface-400 text-center">Thanks — style memory updated</p>;
+  }
+
+  return (
+    <div className="flex items-center justify-center gap-3">
+      <p className="text-xs text-surface-400">Sound like you?</p>
+      <button
+        onClick={() => submit("good")}
+        className="text-xs px-2.5 py-1 rounded-lg border border-success-200 text-success-700 hover:bg-success-50 transition-colors"
+      >
+        Yes
+      </button>
+      <button
+        onClick={() => submit("wrong_style")}
+        className="text-xs px-2.5 py-1 rounded-lg border border-surface-200 text-surface-500 hover:bg-surface-50 transition-colors"
+      >
+        No
+      </button>
     </div>
   );
 }

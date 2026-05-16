@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Card, Button, Badge } from "@/components/ui";
 import { listThreads } from "@/app/actions/threads";
-import { Mail, Users, CalendarCheck, ArrowRight, RefreshCw } from "lucide-react";
+import { Mail, Users, ArrowRight, RefreshCw } from "lucide-react";
 import type { EmailThread } from "@/lib/types";
 
 export default function DashboardPage() {
@@ -86,15 +86,6 @@ export default function DashboardPage() {
           href="/contacts"
           label="View Contacts"
           iconBg="bg-accent-50"
-          variant="secondary"
-        />
-        <QuickAction
-          icon={<CalendarCheck className="w-6 h-6 text-success-600" />}
-          title="Class Follow-Ups"
-          description="Generate follow-up emails after class"
-          href="/classes"
-          label="Log a Class"
-          iconBg="bg-success-50"
           variant="secondary"
         />
       </div>

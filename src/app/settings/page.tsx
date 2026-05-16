@@ -80,19 +80,20 @@ export default function SettingsPage() {
             placeholder="City Boxing Gym"
           />
           <Textarea
-            label="Gym Context"
+            label="Reply Rules"
             value={gymContext}
             onChange={(e) => setGymContext(e.target.value)}
             rows={5}
-            placeholder={`Tell the AI about your gym. For example:
+            placeholder={`Rules the AI must follow in every reply. For example:
 - Two locations: Main St and West End
 - Classes: Boxing, Muay Thai, Sparring
 - Hours: Mon–Fri 6am–9pm, Sat–Sun 8am–6pm
 - Membership: $120/month or $30 casual
-- Friendly, community-focused gym`}
+- Always offer a free trial to new leads
+- Never quote custom pricing — direct them to call`}
           />
           <p className="text-xs text-surface-400">
-            The more context you give, the better the AI replies will sound.
+            The AI will follow these rules exactly when drafting every reply.
           </p>
         </div>
       </Card>

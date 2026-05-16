@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createClient } from "@/lib/supabase/server";
-import type { EmailClassification, EmailMessage } from "@/lib/types";
+import { retrieveStyleContext, buildStylePromptSection } from "@/lib/style-memory";
+import type { EmailMessage } from "@/lib/types";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 const MAX_RAW_EMAIL_CHARS = 12000;
@@ -22,36 +23,14 @@ function toPlainText(text: string): string {
     .trim();
 }
 
-function quickClassify(subject: string, context: string): EmailClassification {
-  const haystack = `${subject}\n${context}`.toLowerCase();
-
-  if (/(cancel|cancellation|refund|chargeback|stop membership|terminate|quit)/.test(haystack))
-    return { type: "cancellation", risk_level: "high", confidence: 0.92, contact_type_guess: "member", summary: "Potential cancellation request requiring manual handling." };
-  if (/(angry|upset|terrible|awful|bad service|frustrat|disappointed|unhappy)/.test(haystack))
-    return { type: "complaint", risk_level: "high", confidence: 0.9, contact_type_guess: "member", summary: "Potential complaint requiring a careful manual response." };
-  if (/(bill|billing|charged|charge|payment|invoice|price wrong|overcharged)/.test(haystack))
-    return { type: "billing", risk_level: "high", confidence: 0.9, contact_type_guess: "member", summary: "Potential billing issue requiring manual review." };
-  if (/(class|schedule|time|coach|instructor|session|availability)/.test(haystack))
-    return { type: "class_inquiry", risk_level: "low", confidence: 0.84, contact_type_guess: "unknown", summary: "Class details or scheduling question." };
-  if (/(trial|free trial|join|membership|price|pricing|plans|sign up|drop in)/.test(haystack))
-    return { type: "lead_inquiry", risk_level: "low", confidence: 0.86, contact_type_guess: "lead", summary: "Lead or trial inquiry." };
-
-  return { type: "general", risk_level: "low", confidence: 0.75, contact_type_guess: "unknown", summary: "General inbound message." };
-}
-
 function stripFences(text: string): string {
   return text.replace(/^```[a-zA-Z]*\n?/g, "").replace(/```$/g, "").trim();
 }
 
 export async function POST(request: Request) {
-  console.log("[generate] route hit");
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    console.log("[generate] unauthorized");
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  console.log("[generate] user:", user.id);
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { subject, messages } = await request.json() as {
     threadId: string;
@@ -65,7 +44,7 @@ export async function POST(request: Request) {
     .eq("user_id", user.id)
     .single();
 
-  const gymName = gymSettings?.gym_name?.trim() || "our gym";
+  const gymName    = gymSettings?.gym_name?.trim()    || "our gym";
   const gymContext = gymSettings?.gym_context?.trim() || "";
 
   const conversationContext = (messages || [])
@@ -76,58 +55,47 @@ export async function POST(request: Request) {
     .join("\n\n");
 
   const cleanSubject = (subject || "").replace(/^Re:\s*/i, "");
-  const classification = quickClassify(subject || "", conversationContext);
-  console.log("[generate] classification:", classification.type, classification.risk_level);
 
-  const isSensitive = classification.risk_level === "high";
+  // ── Style retrieval (runs concurrently, never blocks) ──────────────────────
+  // Queries the user's past replies for similar emails and builds a style section.
+  // Falls back to null if the user has no samples yet — prompt degrades gracefully.
+  const inboundText = (messages || [])
+    .filter((m) => m.direction === "inbound")
+    .slice(-1)
+    .map((m) => toPlainText(m.body_text || "").slice(0, 400))
+    .join("\n") || subject || "";
 
-  const prompt = isSensitive
-    ? `You are replying on behalf of ${gymName}, a boxing/martial arts gym.
-${gymContext ? `\nGYM POLICIES — you MUST apply these exactly:\n${gymContext}\n` : ""}
-This email is about: ${classification.summary}
+  const styleCtx = await retrieveStyleContext(supabase, user.id, inboundText);
+  const styleSection = buildStylePromptSection(styleCtx);
 
-Subject: ${subject || "(no subject)"}
+  // ── Prompt ─────────────────────────────────────────────────────────────────
+  const prompt = `Write a reply for ${gymName}, a boxing/martial arts gym.
+${gymContext ? `\nReply rules — follow these exactly:\n${gymContext}\n` : ""}${styleSection ? `\n${styleSection}` : ""}Subject: ${subject || "(no subject)"}
 Conversation:
 ${conversationContext}
 
 Rules:
 - Under 100 words
-- Empathetic and professional — acknowledge their concern clearly
-- Apply the gym policies above directly; if a policy covers their request, state it plainly and kindly
-- Do not make commitments or promises beyond what the policies allow
-- No markdown, no JSON
-
-Return only the reply body text.`
-    : `Write a short reply for ${gymName}, a boxing/martial arts gym.
-${gymContext ? `\nGym context:\n${gymContext}\n` : ""}
-Subject: ${subject || "(no subject)"}
-Conversation:
-${conversationContext}
-
-Rules:
-- Under 85 words
 - Friendly and warm, like a coach
-- Include one clear next step/question
-- No markdown, no JSON, no greeting repetition
+- Include one clear next step or question
+- No markdown, no JSON
 
 Return only the reply body text.`;
 
   const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
 
-  console.log("[generate] calling Gemini...");
   try {
     const result = await model.generateContent({
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: { maxOutputTokens: isSensitive ? 200 : 140, temperature: 0.4 },
+      generationConfig: { maxOutputTokens: 160, temperature: 0.4 },
     });
 
     const replyBody = stripFences(result.response.text() || "").trim();
-    console.log("[generate] reply length:", replyBody.length, "chars");
-    return NextResponse.json({ classification, generation: null, subject: `Re: ${cleanSubject}`, body: replyBody });
+    return NextResponse.json({ generation: null, subject: `Re: ${cleanSubject}`, body: replyBody });
   } catch (err) {
     console.error("[generate] LLM error:", err);
     return NextResponse.json(
-      { classification, generation: null, subject: `Re: ${cleanSubject}`, body: "", error: true },
+      { generation: null, subject: `Re: ${cleanSubject}`, body: "", error: true },
       { status: 500 }
     );
   }

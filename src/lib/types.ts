@@ -70,52 +70,6 @@ export interface AIGeneration {
   created_at: string;
 }
 
-export interface EmailClassification {
-  type: "lead_inquiry" | "complaint" | "billing" | "cancellation" | "general" | "class_inquiry";
-  risk_level: "low" | "medium" | "high";
-  confidence: number;
-  contact_type_guess: "lead" | "trial" | "member" | "unknown";
-  summary: string;
-}
-
-// ============ Follow-Ups ============
-
-export interface ScheduledFollowUp {
-  id: string;
-  user_id: string;
-  contact_id: string;
-  thread_id: string | null;
-  template_id: string | null;
-  type: "trial_reminder" | "missed_class" | "inactive_member" | "lead_followup" | "renewal";
-  scheduled_at: string;
-  status: "pending" | "sent" | "cancelled" | "failed";
-  qstash_message_id: string | null;
-  ai_generation_id: string | null;
-  created_at: string;
-  contact?: Contact;
-}
-
-// ============ Class Follow-Up Tool (existing) ============
-
-export type Location = "main" | "second" | string;
-
-export interface GymClass {
-  id: string;
-  className: string;
-  instructor: string;
-  date: string;
-  time: string;
-  location: string;
-  attendeeEmails: string[];
-  followUpSent: boolean;
-  createdAt: string;
-}
-
-export interface FollowUpDraft {
-  subject: string;
-  body: string;
-}
-
 // ============ UI Types ============
 
 export type ButtonVariant = "primary" | "secondary" | "outline" | "ghost" | "danger";

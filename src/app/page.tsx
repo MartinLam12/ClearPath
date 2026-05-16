@@ -8,7 +8,7 @@ import {
   Clock,
   CheckCircle2,
   MessageSquare,
-  CalendarCheck,
+  Settings2,
 } from "lucide-react";
 
 export default function LandingPage() {
@@ -37,8 +37,8 @@ function HeroSection() {
               <span className="text-brand-600">unanswered emails</span>
             </h1>
             <p className="text-lg md:text-body-xl text-surface-500 max-w-2xl mx-auto mb-10 leading-relaxed">
-              AI-powered email replies and automatic post-class follow-ups —
-              so you can focus on coaching, not your inbox.
+              Read your inbox and send AI-drafted replies that follow your
+              gym&apos;s rules — so you can focus on coaching, not your inbox.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link href="/signup">
@@ -80,10 +80,10 @@ function FeaturesSection() {
         "Paste any inquiry — membership, pricing, schedule — and get a professional, gym-branded reply in seconds.",
     },
     {
-      icon: CalendarCheck,
-      title: "Post-Class Follow-Ups",
+      icon: Settings2,
+      title: "Custom Reply Rules",
       description:
-        "Log a class and instantly generate a follow-up email to every attendee. Keep them coming back.",
+        "Upload your gym's rules once — pricing, hours, policies — and every AI draft follows them automatically.",
     },
     {
       icon: Clock,
