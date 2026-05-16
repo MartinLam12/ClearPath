@@ -172,17 +172,27 @@ export async function embedText(
  * Pass generationId when processing a freshly-sent reply.
  * Both are nullable to simplify callers — at least one should be provided.
  */
+export interface AddSampleResult {
+  saved:   boolean;
+  reason?: string;
+}
+
 export async function addStyleSample(
   supabase: SupabaseClient,
   userId: string,
   rawText: string,
   opts: { messageId?: string; generationId?: string } = {}
-): Promise<void> {
+): Promise<AddSampleResult> {
   try {
     const cleanBody = cleanEmailText(rawText);
     const wc = wordCount(cleanBody);
 
-    if (wc < MIN_SAMPLE_WORDS || wc > MAX_SAMPLE_WORDS) return;
+    if (wc < MIN_SAMPLE_WORDS) {
+      return { saved: false, reason: `Text too short after cleaning (${wc} words, minimum ${MIN_SAMPLE_WORDS})` };
+    }
+    if (wc > MAX_SAMPLE_WORDS) {
+      return { saved: false, reason: `Text too long after cleaning (${wc} words, maximum ${MAX_SAMPLE_WORDS})` };
+    }
 
     const embedding = await embedText(cleanBody, TaskType.RETRIEVAL_DOCUMENT);
 
@@ -198,14 +208,21 @@ export async function addStyleSample(
     if (opts.messageId)    row.message_id    = opts.messageId;
     if (opts.generationId) row.generation_id = opts.generationId;
 
-    // ON CONFLICT on message_id / generation_id prevents duplicate processing.
-    // If both are null we just insert (idempotency not guaranteed, acceptable).
     const { error } = await supabase.from("style_samples").insert(row);
-    if (error && !error.message.includes("duplicate")) {
+
+    if (error) {
+      if (error.message.includes("duplicate")) {
+        return { saved: true }; // already exists — idempotent success
+      }
       console.error("[style] insert error:", error.message);
+      return { saved: false, reason: error.message };
     }
+
+    return { saved: true };
   } catch (err) {
-    console.error("[style] addStyleSample error:", err);
+    const reason = err instanceof Error ? err.message : String(err);
+    console.error("[style] addStyleSample error:", reason);
+    return { saved: false, reason };
   }
 }
 

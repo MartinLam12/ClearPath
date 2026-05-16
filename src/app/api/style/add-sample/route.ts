@@ -3,6 +3,11 @@
  *
  * Adds a manually pasted email as a style sample.
  * Body: { body: string }
+ *
+ * Returns:
+ *   200 { ok: true, sampleCount: number }  — sample saved
+ *   400 { error: string }                  — input validation failed
+ *   500 { error: string }                  — DB or embedding failure
  */
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
@@ -20,15 +25,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Email text too short" }, { status: 400 });
   }
 
-  await addStyleSample(supabase, user.id, emailBody);
+  const result = await addStyleSample(supabase, user.id, emailBody);
+
+  if (!result.saved) {
+    return NextResponse.json(
+      { error: result.reason ?? "Failed to save style sample" },
+      { status: 500 }
+    );
+  }
+
   await updateStyleProfile(supabase, user.id);
 
-  // Return updated sample count
   const { data: profile } = await supabase
     .from("style_profile")
     .select("sample_count")
     .eq("user_id", user.id)
     .single();
 
-  return NextResponse.json({ ok: true, sampleCount: profile?.sample_count ?? 1 });
+  // Use 0 as the fallback — never fake a non-zero count
+  return NextResponse.json({ ok: true, sampleCount: profile?.sample_count ?? 0 });
 }
