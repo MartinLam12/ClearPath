@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Card, CardTitle, CardDescription, Button, Input, Textarea } from "@/components/ui";
 import { getGymSettings, saveGymSettings, disconnectGmail } from "@/app/actions/gym-settings";
-import { Save, Building2, Mail, CheckCircle2, AlertCircle } from "lucide-react";
+import { Save, Building2, Mail, CheckCircle2, AlertCircle, Sparkles, Plus } from "lucide-react";
 import type { GymSettings } from "@/lib/types";
 
 export default function SettingsPage() {
@@ -14,6 +14,12 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
 
+  // Style examples
+  const [sampleCount, setSampleCount] = useState<number | null>(null);
+  const [exampleText, setExampleText] = useState("");
+  const [addingExample, setAddingExample] = useState(false);
+  const [exampleAdded, setExampleAdded] = useState(false);
+
   useEffect(() => {
     getGymSettings().then((s) => {
       if (s) {
@@ -23,6 +29,11 @@ export default function SettingsPage() {
       }
     });
 
+    fetch("/api/style/status")
+      .then((r) => r.json())
+      .then((d) => setSampleCount(d.sampleCount ?? 0))
+      .catch(() => setSampleCount(0));
+
     // Handle OAuth result query params
     const params = new URLSearchParams(window.location.search);
     if (params.get("connected") === "true") {
@@ -30,6 +41,24 @@ export default function SettingsPage() {
       window.history.replaceState({}, "", "/settings");
     }
   }, []);
+
+  const handleAddExample = async () => {
+    if (!exampleText.trim()) return;
+    setAddingExample(true);
+    const res = await fetch("/api/style/add-sample", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ body: exampleText }),
+    }).catch(() => null);
+    const data = res?.ok ? await res.json() : null;
+    setAddingExample(false);
+    if (data?.ok) {
+      setExampleText("");
+      setSampleCount(data.sampleCount);
+      setExampleAdded(true);
+      setTimeout(() => setExampleAdded(false), 3000);
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -95,6 +124,64 @@ export default function SettingsPage() {
           <p className="text-xs text-surface-400">
             The AI will follow these rules exactly when drafting every reply.
           </p>
+        </div>
+      </Card>
+
+      {/* Style examples */}
+      <Card>
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-10 h-10 rounded-xl bg-brand-50 flex items-center justify-center">
+            <Sparkles className="w-5 h-5 text-brand-600" />
+          </div>
+          <div>
+            <CardTitle>Writing Style Examples</CardTitle>
+            <CardDescription>
+              Paste emails you&apos;ve written so the AI learns your tone
+              {sampleCount !== null && (
+                <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-brand-50 text-brand-700">
+                  {sampleCount} {sampleCount === 1 ? "example" : "examples"} saved
+                </span>
+              )}
+            </CardDescription>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <Textarea
+            label="Paste an email you wrote"
+            value={exampleText}
+            onChange={(e) => setExampleText(e.target.value)}
+            rows={6}
+            placeholder={`Paste the body of an email you've sent before. For example:
+
+Hey John,
+
+Thanks for reaching out! We'd love to have you come in and try a class. We run boxing sessions Mon–Fri at 6pm and Saturday mornings at 9am.
+
+Drop by any time or let me know what works and I'll get you booked in.
+
+Coach Martin`}
+          />
+          <p className="text-xs text-surface-400">
+            Add a few examples of how you typically write replies — the more you add, the better the drafts will sound like you.
+          </p>
+
+          {exampleAdded && (
+            <div className="flex items-center gap-2 text-sm text-success-700 bg-success-50 border border-success-200 rounded-xl px-4 py-3">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              Example saved — style memory updated.
+            </div>
+          )}
+
+          <Button
+            onClick={handleAddExample}
+            loading={addingExample}
+            disabled={!exampleText.trim()}
+            variant="secondary"
+            icon={<Plus className="w-4 h-4" />}
+          >
+            Save Example
+          </Button>
         </div>
       </Card>
 
